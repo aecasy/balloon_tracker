@@ -15,29 +15,43 @@ if str(SRC_DIR) not in sys.path:
 import cv2
 
 from vision_tracker.camera import CameraConfig, PiCamera
-from vision_tracker.color_detector import HsvRange, create_hsv_mask, parse_hsv_triplet
+from vision_tracker.color_detector import create_hsv_mask, parse_hsv_triplet
+from vision_tracker.config import default_config_path, load_app_config, with_overrides
 from vision_tracker.geometry import ImageSize
-from vision_tracker.tracker import TargetTracker, TrackerConfig
+from vision_tracker.tracker import TargetTracker
 
 
 def main() -> int:
     args = parse_args()
-
-    camera_config = CameraConfig(
+    config_path = args.config.resolve()
+    config = load_app_config(config_path)
+    config = with_overrides(
+        config,
         width=args.width,
         height=args.height,
         focus=args.focus,
         lens_position=args.lens_position,
+        lower_hsv=args.lower_hsv,
+        upper_hsv=args.upper_hsv,
+        min_area=args.min_area,
+        min_circularity=args.min_circularity,
+        smoothing_alpha=args.smoothing_alpha,
+        kernel_size=args.kernel_size,
+        open_iterations=args.open_iterations,
+        close_iterations=args.close_iterations,
     )
-    hsv_range = HsvRange(lower=args.lower_hsv, upper=args.upper_hsv)
-    tracker = TargetTracker(
-        TrackerConfig(
-            min_area=args.min_area,
-            min_circularity=args.min_circularity,
-            smoothing_alpha=args.smoothing_alpha,
-        )
+
+    camera_config = CameraConfig(
+        width=config.camera.width,
+        height=config.camera.height,
+        pixel_format=config.camera.pixel_format,
+        focus=config.camera.focus,
+        lens_position=config.camera.lens_position,
     )
-    image_size = ImageSize(width=args.width, height=args.height)
+    tracker = TargetTracker(config.tracker)
+    image_size = ImageSize(width=config.camera.width, height=config.camera.height)
+
+    print(f"loaded_config={config_path}", flush=True)
 
     try:
         with PiCamera(camera_config) as camera:
@@ -45,10 +59,10 @@ def main() -> int:
                 frame = camera.capture_array()
                 mask = create_hsv_mask(
                     frame,
-                    hsv_range,
-                    open_iterations=args.open_iterations,
-                    close_iterations=args.close_iterations,
-                    kernel_size=args.kernel_size,
+                    config.hsv,
+                    open_iterations=config.morphology.open_iterations,
+                    close_iterations=config.morphology.close_iterations,
+                    kernel_size=config.morphology.kernel_size,
                 )
                 result = tracker.update(mask, image_size)
                 print(result.to_log_line(), flush=True)
@@ -70,18 +84,24 @@ def main() -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Track a green ball target with Picamera2 and OpenCV.")
-    parser.add_argument("--width", type=int, default=640, help="camera image width")
-    parser.add_argument("--height", type=int, default=480, help="camera image height")
-    parser.add_argument("--lower-hsv", type=parse_hsv_triplet, default=(68, 180, 20), help="lower HSV bound: H,S,V")
-    parser.add_argument("--upper-hsv", type=parse_hsv_triplet, default=(88, 255, 255), help="upper HSV bound: H,S,V")
-    parser.add_argument("--min-area", type=float, default=300.0, help="minimum contour area in pixels")
-    parser.add_argument("--min-circularity", type=float, default=0.55, help="minimum contour circularity from 0 to 1")
-    parser.add_argument("--smoothing-alpha", type=float, default=0.35, help="centroid smoothing alpha from 0 to 1")
-    parser.add_argument("--kernel-size", type=int, default=5, help="morphology kernel size; use 0 to disable")
-    parser.add_argument("--open-iterations", type=int, default=1, help="morphological open iterations")
-    parser.add_argument("--close-iterations", type=int, default=2, help="morphological close iterations")
-    parser.add_argument("--focus", choices=["continuous", "manual", "none"], default="continuous", help="camera focus mode")
-    parser.add_argument("--lens-position", type=float, default=2.0, help="manual focus lens position")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=default_config_path(PROJECT_ROOT),
+        help="tracker JSON config file",
+    )
+    parser.add_argument("--width", type=int, default=None, help="temporary camera image width override")
+    parser.add_argument("--height", type=int, default=None, help="temporary camera image height override")
+    parser.add_argument("--lower-hsv", type=parse_hsv_triplet, default=None, help="temporary lower HSV override: H,S,V")
+    parser.add_argument("--upper-hsv", type=parse_hsv_triplet, default=None, help="temporary upper HSV override: H,S,V")
+    parser.add_argument("--min-area", type=float, default=None, help="temporary minimum contour area override")
+    parser.add_argument("--min-circularity", type=float, default=None, help="temporary circularity override from 0 to 1")
+    parser.add_argument("--smoothing-alpha", type=float, default=None, help="temporary smoothing alpha override from 0 to 1")
+    parser.add_argument("--kernel-size", type=int, default=None, help="temporary morphology kernel size override")
+    parser.add_argument("--open-iterations", type=int, default=None, help="temporary morphological open override")
+    parser.add_argument("--close-iterations", type=int, default=None, help="temporary morphological close override")
+    parser.add_argument("--focus", choices=["continuous", "manual", "none"], default=None, help="temporary focus mode override")
+    parser.add_argument("--lens-position", type=float, default=None, help="temporary manual focus lens position override")
     parser.add_argument("--no-display", dest="display", action="store_false", help="disable OpenCV debug windows")
     parser.set_defaults(display=True)
     return parser.parse_args()

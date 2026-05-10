@@ -56,20 +56,28 @@ class PiCamera:
         return self._picam2.capture_array()
 
     def _apply_focus_controls(self) -> None:
-        if self.config.focus == "none":
+        self.set_focus_controls(self.config.focus, self.config.lens_position)
+
+    def set_focus_controls(self, focus: str, lens_position: float) -> None:
+        if self._picam2 is None:
             return
+
+        if focus == "none":
+            return
+        if focus not in {"continuous", "manual"}:
+            raise ValueError("focus must be one of: continuous, manual, none")
 
         try:
             from libcamera import controls
         except ImportError:
             return
 
-        if self.config.focus == "continuous":
+        if focus == "continuous":
             self._picam2.set_controls({"AfMode": controls.AfModeEnum.Continuous})
-        elif self.config.focus == "manual":
+        elif focus == "manual":
             self._picam2.set_controls(
                 {
                     "AfMode": controls.AfModeEnum.Manual,
-                    "LensPosition": self.config.lens_position,
+                    "LensPosition": lens_position,
                 }
             )

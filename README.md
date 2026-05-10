@@ -59,11 +59,27 @@ Interactive HSV probe:
 python3 scripts/hsv_probe.py
 ```
 
+Live tracker tuning with sliders:
+
+```bash
+python3 scripts/tune_tracker.py
+```
+
+The tuner opens camera, mask, and controls windows. Move the sliders until the green ball is isolated cleanly in the mask, then press `s` to save the current parameters to:
+
+```text
+config/green_tracker.json
+```
+
+Press `q` to quit.
+
 Green ball tracker:
 
 ```bash
 python3 scripts/green_tracker.py
 ```
+
+The tracker reads `config/green_tracker.json` by default. Use CLI flags only when you want a temporary override without changing the saved file.
 
 Example with explicit settings:
 
@@ -77,6 +93,13 @@ python3 scripts/green_tracker.py \
   --min-circularity 0.55 \
   --smoothing-alpha 0.35 \
   --focus continuous
+```
+
+Use a different config file:
+
+```bash
+python3 scripts/green_tracker.py --config config/green_tracker.json
+python3 scripts/tune_tracker.py --config config/green_tracker.json
 ```
 
 Headless-style run without debug windows:
@@ -118,15 +141,19 @@ docs/
   CASY_Drone_Camera_Project_Specifications.md
   ChatGPT handoff.md
   calibration_notes.md
+config/
+  green_tracker.json
 scripts/
   cam_test.py
   green_tracker.py
   hsv_probe.py
+  tune_tracker.py
 src/
   vision_tracker/
     __init__.py
     camera.py
     color_detector.py
+    config.py
     geometry.py
     tracker.py
 tests/

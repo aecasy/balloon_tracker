@@ -1,0 +1,23 @@
+{
+  "camera": {
+    "width": 640,
+    "height": 480,
+    "pixel_format": "RGB888",
+    "focus": "continuous",
+    "lens_position": 2.0
+  },
+  "hsv": {
+    "lower": [68, 180, 20],
+    "upper": [88, 255, 255]
+  },
+  "morphology": {
+    "kernel_size": 5,
+    "open_iterations": 1,
+    "close_iterations": 2
+  },
+  "tracker": {
+    "min_area": 300.0,
+    "min_circularity": 0.55,
+    "smoothing_alpha": 0.35
+  }
+}

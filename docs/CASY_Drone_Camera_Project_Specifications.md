@@ -20,6 +20,12 @@ lower_green = (68, 180, 20)
 upper_green = (88, 255, 255)
 ```
 
+Runtime and tuning parameters are stored in:
+
+```text
+config/green_tracker.json
+```
+
 ## Hardware
 
 - Raspberry Pi 4
@@ -81,6 +87,14 @@ Definitions:
 10. Smooth the centroid.
 11. Compute `dx` and `dy` from image center.
 12. Print one tracking line per frame.
+
+## Tuning Workflow
+
+1. Run `python3 scripts/tune_tracker.py`.
+2. Adjust HSV, morphology, area, circularity, smoothing, focus mode, and lens position sliders.
+3. Watch both the camera window and mask window.
+4. Press `s` to save the current settings to `config/green_tracker.json`.
+5. Run `python3 scripts/green_tracker.py`; it loads the saved config automatically.
 
 ## Immediate Milestones
 
