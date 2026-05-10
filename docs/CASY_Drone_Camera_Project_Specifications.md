@@ -1,0 +1,91 @@
+# CASY Drone Camera Project Specifications
+
+## Goal
+
+Build a Raspberry Pi camera-based vision module for a drone. The module detects a simple colored target in live video, computes the target centroid in image coordinates, and later converts that centroid into horizontal and vertical bearing angles relative to the camera optical axis.
+
+The current phase does not include distance estimation, 3D reconstruction, SLAM, neural-network detection, ROS integration, or camera calibration code.
+
+## Current Target
+
+- Green ball
+- HSV segmentation
+- Contour filtering
+- Centroid extraction
+
+Current HSV range:
+
+```python
+lower_green = (68, 180, 20)
+upper_green = (88, 255, 255)
+```
+
+## Hardware
+
+- Raspberry Pi 4
+- Raspberry Pi Camera Module 3
+- Green ball target
+
+## Current Development Setup
+
+- Ubuntu 26.04 on Raspberry Pi 4
+- `rpicam-apps`
+- Picamera2
+- libcamera
+- OpenCV
+- NumPy
+
+Known working camera configuration:
+
+```python
+main={"size": (640, 480), "format": "RGB888"}
+```
+
+## Final Deployment Target
+
+- Raspberry Pi 4
+- Ubuntu Server 20.04
+- ROS Noetic
+- Headless operation
+- ROS node publishing target bearing
+
+Deployment risk: Ubuntu 20.04 plus Raspberry Pi Camera Module 3 and Picamera2/libcamera may require extra setup. Do not assume the Ubuntu 26.04 bring-up stack will transfer directly.
+
+## Tracker Output
+
+The immediate tracker output is:
+
+```text
+detected=<bool> dx=<int|None> dy=<int|None> area=<int> circularity=<float>
+```
+
+Definitions:
+
+- `detected`: whether a valid target contour was found.
+- `dx`: horizontal pixel offset from image center. Positive means target is right of center.
+- `dy`: vertical pixel offset from image center. Positive means target is above center.
+- `area`: selected contour area in pixels.
+- `circularity`: selected contour circularity from 0 to 1.
+
+## Current Algorithm
+
+1. Capture frame from Picamera2.
+2. Convert frame from BGR to HSV.
+3. Threshold green pixels.
+4. Clean the mask with morphology.
+5. Find external contours.
+6. Reject contours below minimum area.
+7. Reject contours below minimum circularity.
+8. Select the largest remaining contour.
+9. Compute centroid from image moments.
+10. Smooth the centroid.
+11. Compute `dx` and `dy` from image center.
+12. Print one tracking line per frame.
+
+## Immediate Milestones
+
+1. Keep the tracker clean and configurable.
+2. Tune HSV, area, circularity, smoothing, and focus options on hardware.
+3. Confirm stable centroid behavior under lighting and distance changes.
+4. Add calibration only after target tracking is stable.
+5. Add ROS only after calibrated bearing math is working.
