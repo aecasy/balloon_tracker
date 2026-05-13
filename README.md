@@ -65,7 +65,19 @@ Live tracker tuning with sliders:
 python3 scripts/tune_tracker.py
 ```
 
-The tuner opens camera, mask, and controls windows. Move the sliders until the green ball is isolated cleanly in the mask, then press `s` to save the current parameters to:
+The tuner opens camera, mask, and grouped controls windows. Hover over any control to see what it does.
+
+The most important controls are in the first two groups:
+
+- `Target color`: HSV bounds. Start here.
+- `Detection quality`: area, circularity, and smoothing.
+
+The advanced groups are useful only when needed:
+
+- `Mask cleanup`: morphology kernel/open/close for noisy masks.
+- `Camera focus`: autofocus/manual focus settings for the Camera Module 3.
+
+Move the sliders until the green ball is isolated cleanly in the mask, then press `s` to save the current parameters to:
 
 ```text
 config/green_tracker.json

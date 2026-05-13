@@ -91,10 +91,13 @@ Definitions:
 ## Tuning Workflow
 
 1. Run `python3 scripts/tune_tracker.py`.
-2. Adjust HSV, morphology, area, circularity, smoothing, focus mode, and lens position sliders.
-3. Watch both the camera window and mask window.
-4. Press `s` to save the current settings to `config/green_tracker.json`.
-5. Run `python3 scripts/green_tracker.py`; it loads the saved config automatically.
+2. Start with the `Target color` group and tune HSV until the ball is white in the mask.
+3. Use `Detection quality` to reject specks and unstable contours.
+4. Use `Mask cleanup` only if the mask is noisy or the target has holes.
+5. Use `Camera focus` only if the image is visibly soft.
+6. Hover over controls in the tuning window for help text.
+7. Press `s` to save the current settings to `config/green_tracker.json`.
+8. Run `python3 scripts/green_tracker.py`; it loads the saved config automatically.
 
 ## Immediate Milestones
 
