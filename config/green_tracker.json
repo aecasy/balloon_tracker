@@ -22,12 +22,20 @@
   },
   "scoring": {
     "min_score": 0.55,
-    "color_fill_weight": 0.35,
-    "circularity_weight": 0.25,
-    "enclosing_fill_weight": 0.2,
-    "solidity_weight": 0.15,
-    "shading_weight": 0.05,
+    "color_fill_enabled": true,
+    "color_fill_weight": 0.25,
+    "circularity_enabled": true,
+    "circularity_weight": 0.05,
+    "circle_fit_enabled": true,
+    "circle_fit_weight": 0.25,
+    "enclosing_fill_enabled": true,
+    "enclosing_fill_weight": 0.15,
+    "solidity_enabled": true,
+    "solidity_weight": 0.1,
+    "relative_area_enabled": true,
+    "relative_area_weight": 0.2,
     "shading_enabled": false,
+    "shading_weight": 0.05,
     "shading_min_area": 400.0
   }
 }

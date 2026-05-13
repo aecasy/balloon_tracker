@@ -35,7 +35,7 @@ CAMERA_WINDOW = "camera"
 MASK_WINDOW = "mask"
 FOCUS_MODES = ("none", "continuous", "manual")
 PANEL_WIDTH = 760
-PANEL_HEIGHT = 1080
+PANEL_HEIGHT = 1260
 
 
 @dataclass(frozen=True)
@@ -110,12 +110,20 @@ class ControlPanel:
             ),
             scoring=ScoringConfig(
                 min_score=self.value("min_score_pct") / 100.0,
+                color_fill_enabled=bool(self.value("color_enabled")),
                 color_fill_weight=self.value("color_weight_pct") / 100.0,
+                circularity_enabled=bool(self.value("circularity_enabled")),
                 circularity_weight=self.value("circularity_weight_pct") / 100.0,
+                circle_fit_enabled=bool(self.value("circle_fit_enabled")),
+                circle_fit_weight=self.value("circle_fit_weight_pct") / 100.0,
+                enclosing_fill_enabled=bool(self.value("fill_enabled")),
                 enclosing_fill_weight=self.value("fill_weight_pct") / 100.0,
+                solidity_enabled=bool(self.value("solidity_enabled")),
                 solidity_weight=self.value("solidity_weight_pct") / 100.0,
-                shading_weight=self.value("shading_weight_pct") / 100.0,
+                relative_area_enabled=bool(self.value("relative_area_enabled")),
+                relative_area_weight=self.value("relative_area_weight_pct") / 100.0,
                 shading_enabled=bool(self.value("shading_enabled")),
+                shading_weight=self.value("shading_weight_pct") / 100.0,
                 shading_min_area=float(clamp(self.value("shading_min_area"), 0, self.max_area)),
             ),
         )
@@ -182,7 +190,7 @@ class ControlPanel:
 
     def draw_help(self, canvas: np.ndarray, config: AppConfig) -> None:
         x = 24
-        y = 950
+        y = 1130
         w = 712
         h = 116
         cv2.rectangle(canvas, (x, y), (x + w, y + h), (48, 54, 60), -1)
@@ -465,6 +473,15 @@ def build_control_specs(max_area: int) -> List[ControlSpec]:
             "Minimum weighted score required for the scored detector to accept a candidate.",
         ),
         ControlSpec(
+            "color_enabled",
+            "Color fill",
+            "Scoring",
+            0,
+            1,
+            "Enable green fill scoring. This creates a candidate ROI mask, so turn it off if you need to compare speed.",
+            choices=("off", "on"),
+        ),
+        ControlSpec(
             "color_weight_pct",
             "Color weight",
             "Scoring",
@@ -473,12 +490,64 @@ def build_control_specs(max_area: int) -> List[ControlSpec]:
             "Weight for how completely green-filled the candidate is. This should usually be the strongest score.",
         ),
         ControlSpec(
+            "circularity_enabled",
+            "Circularity",
+            "Scoring",
+            0,
+            1,
+            "Enable classic circularity scoring. It is cheap, but can be noisy for tiny contours.",
+            choices=("off", "on"),
+        ),
+        ControlSpec(
             "circularity_weight_pct",
-            "Round weight",
+            "Circ weight",
             "Scoring",
             0,
             100,
             "Weight for contour circularity. Useful, but noisy for tiny blobs, so avoid making it the only strong cue.",
+        ),
+        ControlSpec(
+            "circle_fit_enabled",
+            "Circle fit",
+            "Scoring",
+            0,
+            1,
+            "Enable circle-fit scoring. This checks whether contour points fit a circular outline.",
+            choices=("off", "on"),
+        ),
+        ControlSpec(
+            "circle_fit_weight_pct",
+            "Fit weight",
+            "Scoring",
+            0,
+            100,
+            "Weight for fitted-circle quality. Good for ball-like shapes.",
+        ),
+        ControlSpec(
+            "relative_area_enabled",
+            "Relative area",
+            "Scoring",
+            0,
+            1,
+            "Enable relative area scoring. This favors the dominant green candidate without fixed size limits.",
+            choices=("off", "on"),
+        ),
+        ControlSpec(
+            "relative_area_weight_pct",
+            "Area weight",
+            "Scoring",
+            0,
+            100,
+            "Weight for area relative to the largest valid green candidate in the frame.",
+        ),
+        ControlSpec(
+            "fill_enabled",
+            "Circle fill",
+            "Scoring",
+            0,
+            1,
+            "Enable enclosing-circle fill scoring. This is scale independent and helps reject partial shapes.",
+            choices=("off", "on"),
         ),
         ControlSpec(
             "fill_weight_pct",
@@ -487,6 +556,15 @@ def build_control_specs(max_area: int) -> List[ControlSpec]:
             0,
             100,
             "Weight for contour area divided by enclosing-circle area. Helps reject thin or partial shapes.",
+        ),
+        ControlSpec(
+            "solidity_enabled",
+            "Solidity",
+            "Scoring",
+            0,
+            1,
+            "Enable solidity scoring. This is cheap and helps reject jagged or fragmented blobs.",
+            choices=("off", "on"),
         ),
         ControlSpec(
             "solidity_weight_pct",
@@ -587,9 +665,17 @@ def initial_control_values(config: AppConfig) -> Dict[str, int]:
         "circularity_pct": int(round(config.tracker.min_circularity * 100.0)),
         "smoothing_pct": int(round(config.tracker.smoothing_alpha * 100.0)),
         "min_score_pct": int(round(config.scoring.min_score * 100.0)),
+        "color_enabled": 1 if config.scoring.color_fill_enabled else 0,
         "color_weight_pct": int(round(config.scoring.color_fill_weight * 100.0)),
+        "circularity_enabled": 1 if config.scoring.circularity_enabled else 0,
         "circularity_weight_pct": int(round(config.scoring.circularity_weight * 100.0)),
+        "circle_fit_enabled": 1 if config.scoring.circle_fit_enabled else 0,
+        "circle_fit_weight_pct": int(round(config.scoring.circle_fit_weight * 100.0)),
+        "relative_area_enabled": 1 if config.scoring.relative_area_enabled else 0,
+        "relative_area_weight_pct": int(round(config.scoring.relative_area_weight * 100.0)),
+        "fill_enabled": 1 if config.scoring.enclosing_fill_enabled else 0,
         "fill_weight_pct": int(round(config.scoring.enclosing_fill_weight * 100.0)),
+        "solidity_enabled": 1 if config.scoring.solidity_enabled else 0,
         "solidity_weight_pct": int(round(config.scoring.solidity_weight * 100.0)),
         "shading_enabled": 1 if config.scoring.shading_enabled else 0,
         "shading_weight_pct": int(round(config.scoring.shading_weight * 100.0)),
@@ -641,17 +727,18 @@ def draw_tuning_status(frame: np.ndarray, config: AppConfig, result) -> None:
 
 def draw_candidate_table(frame: np.ndarray, result) -> None:
     candidates = getattr(result, "candidates", ())
-    rows = ["rank area circ fill sol color shade score"]
+    rows = ["rank area rel fit circ fill sol color shade score"]
     for index, candidate in enumerate(candidates[:4], start=1):
         rows.append(
-            f"{index:>2} {candidate.area:>5.0f} {candidate.circularity:.2f} "
-            f"{candidate.enclosing_fill:.2f} {candidate.solidity:.2f} "
-            f"{candidate.color_fill:.2f} {candidate.shading_score:.2f} {candidate.score:.2f}"
+            f"{index:>2} {candidate.area:>5.0f} {format_metric(candidate.relative_area)} "
+            f"{format_metric(candidate.circle_fit)} {format_metric(candidate.circularity)} "
+            f"{format_metric(candidate.enclosing_fill)} {format_metric(candidate.solidity)} "
+            f"{format_metric(candidate.color_fill)} {format_metric(candidate.shading_score)} {candidate.score:.2f}"
         )
 
     x = 10
     y = 184
-    width = 390
+    width = 540
     height = 24 + (len(rows) * 20)
     overlay = frame.copy()
     cv2.rectangle(overlay, (x - 6, y - 22), (x + width, y - 22 + height), (0, 0, 0), -1)
@@ -660,6 +747,12 @@ def draw_candidate_table(frame: np.ndarray, result) -> None:
     for row in rows:
         cv2.putText(frame, row, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (230, 235, 240), 1, cv2.LINE_AA)
         y += 20
+
+
+def format_metric(value) -> str:
+    if value is None:
+        return "off"
+    return f"{value:.2f}"
 
 
 def draw_group_header(canvas: np.ndarray, text: str, y: int) -> None:

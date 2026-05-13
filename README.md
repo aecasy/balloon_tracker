@@ -77,6 +77,8 @@ The advanced groups are useful only when needed:
 - `Mask cleanup`: morphology kernel/open/close for noisy masks.
 - `Camera focus`: autofocus/manual focus settings for the Camera Module 3.
 
+The `Scoring` group has on/off controls for each scoring component. Turning a component off removes it from the score and avoids its calculation. `Color fill` and `Shading` are the most image/ROI-heavy; `Shading` stays off by default.
+
 Move the sliders until the green ball is isolated cleanly in the mask, then press `s` to save the current parameters to:
 
 ```text

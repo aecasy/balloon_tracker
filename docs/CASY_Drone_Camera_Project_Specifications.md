@@ -106,6 +106,8 @@ The original legacy method selects the largest contour that passes area and circ
 
 The scored method does not use a fixed radius or fixed object-size gate. Area is used only as the existing cleanup threshold and as a tie-breaker when candidates have equal scores.
 
+Scoring components can be enabled or disabled in `config/green_tracker.json` and the tuning UI. Disabled components are not included in the weighted score. Expensive components such as color-fill ROI scoring and shading analysis should be disabled when testing Pi performance.
+
 ## Tuning Workflow
 
 1. Run `python3 scripts/tune_tracker.py`.

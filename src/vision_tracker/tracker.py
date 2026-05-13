@@ -30,12 +30,20 @@ class TrackerConfig:
 @dataclass(frozen=True)
 class ScoringConfig:
     min_score: float = 0.55
-    color_fill_weight: float = 0.35
-    circularity_weight: float = 0.25
-    enclosing_fill_weight: float = 0.20
-    solidity_weight: float = 0.15
-    shading_weight: float = 0.05
+    color_fill_enabled: bool = True
+    color_fill_weight: float = 0.25
+    circularity_enabled: bool = True
+    circularity_weight: float = 0.05
+    circle_fit_enabled: bool = True
+    circle_fit_weight: float = 0.25
+    enclosing_fill_enabled: bool = True
+    enclosing_fill_weight: float = 0.15
+    solidity_enabled: bool = True
+    solidity_weight: float = 0.10
+    relative_area_enabled: bool = True
+    relative_area_weight: float = 0.20
     shading_enabled: bool = False
+    shading_weight: float = 0.05
     shading_min_area: float = 400.0
 
     def __post_init__(self) -> None:
@@ -47,44 +55,50 @@ class ScoringConfig:
         weights = [
             self.color_fill_weight,
             self.circularity_weight,
+            self.circle_fit_weight,
             self.enclosing_fill_weight,
             self.solidity_weight,
+            self.relative_area_weight,
             self.shading_weight,
         ]
         if any(weight < 0 for weight in weights):
             raise ValueError("score weights must be non-negative")
-        if sum(weights[:-1]) <= 0 and (self.shading_enabled and self.shading_weight <= 0):
-            raise ValueError("at least one score weight must be positive")
 
 
 @dataclass(frozen=True)
 class CandidateMetrics:
     area: float
-    circularity: float
-    enclosing_fill: float
-    solidity: float
-    color_fill: float
-    shading_score: float
+    circularity: Optional[float]
+    circle_fit: Optional[float]
+    enclosing_fill: Optional[float]
+    solidity: Optional[float]
+    relative_area: Optional[float]
+    color_fill: Optional[float]
+    shading_score: Optional[float]
 
 
 @dataclass(frozen=True)
 class ScoredCandidate:
     centroid: PixelPoint
     area: float
-    circularity: float
-    enclosing_fill: float
-    solidity: float
-    color_fill: float
-    shading_score: float
+    circularity: Optional[float]
+    circle_fit: Optional[float]
+    enclosing_fill: Optional[float]
+    solidity: Optional[float]
+    relative_area: Optional[float]
+    color_fill: Optional[float]
+    shading_score: Optional[float]
     score: float
     contour: np.ndarray
 
-    def component_scores(self) -> Dict[str, float]:
+    def component_scores(self) -> Dict[str, Optional[float]]:
         return {
             "color_fill": self.color_fill,
             "circularity": self.circularity,
+            "circle_fit": self.circle_fit,
             "enclosing_fill": self.enclosing_fill,
             "solidity": self.solidity,
+            "relative_area": self.relative_area,
             "shading": self.shading_score,
         }
 
@@ -113,10 +127,13 @@ class DetectionResult:
 @dataclass(frozen=True)
 class ScoredDetectionResult(DetectionResult):
     score: float = 0.0
-    enclosing_fill: float = 0.0
-    solidity: float = 0.0
-    color_fill: float = 0.0
-    shading_score: float = 0.0
+    enclosing_fill: Optional[float] = None
+    solidity: Optional[float] = None
+    color_fill: Optional[float] = None
+    circularity_score: Optional[float] = None
+    circle_fit: Optional[float] = None
+    relative_area: Optional[float] = None
+    shading_score: Optional[float] = None
     candidates: Tuple[ScoredCandidate, ...] = ()
 
     def to_log_line(self, include_components: bool = False) -> str:
@@ -127,9 +144,13 @@ class ScoredDetectionResult(DetectionResult):
         line = f"{base} score={self.score:.2f}"
         if include_components:
             line = (
-                f"{line} color_fill={self.color_fill:.2f} "
-                f"enclosing_fill={self.enclosing_fill:.2f} solidity={self.solidity:.2f} "
-                f"shading={self.shading_score:.2f}"
+                f"{line} color_fill={format_score_value(self.color_fill)} "
+                f"circularity_score={format_score_value(self.circularity_score)} "
+                f"circle_fit={format_score_value(self.circle_fit)} "
+                f"relative_area={format_score_value(self.relative_area)} "
+                f"enclosing_fill={format_score_value(self.enclosing_fill)} "
+                f"solidity={format_score_value(self.solidity)} "
+                f"shading={format_score_value(self.shading_score)}"
             )
         return line
 
@@ -222,13 +243,16 @@ class TargetTracker:
             dx=int(round(dx)),
             dy=int(round(dy)),
             area=candidate.area,
-            circularity=candidate.circularity,
+            circularity=candidate.circularity if candidate.circularity is not None else 0.0,
             timestamp=time(),
             method="scored",
             score=candidate.score,
             enclosing_fill=candidate.enclosing_fill,
             solidity=candidate.solidity,
             color_fill=candidate.color_fill,
+            circularity_score=candidate.circularity,
+            circle_fit=candidate.circle_fit,
+            relative_area=candidate.relative_area,
             shading_score=candidate.shading_score,
             candidates=tuple(candidates),
         )
@@ -293,7 +317,10 @@ def score_candidates(
     scoring_config: ScoringConfig,
     frame: Optional[np.ndarray] = None,
 ) -> List[ScoredCandidate]:
-    candidates: List[ScoredCandidate] = []
+    if active_weight_sum(scoring_config) <= 0.0:
+        return []
+
+    raw_candidates: List[Tuple[np.ndarray, PixelPoint, float]] = []
 
     for contour in find_external_contours(mask):
         area = float(cv2.contourArea(contour))
@@ -304,7 +331,13 @@ def score_candidates(
         if centroid is None:
             continue
 
-        metrics = candidate_metrics(mask, contour, area, scoring_config, frame)
+        raw_candidates.append((contour, centroid, area))
+
+    largest_area = max((area for _, _, area in raw_candidates), default=0.0)
+    candidates: List[ScoredCandidate] = []
+
+    for contour, centroid, area in raw_candidates:
+        metrics = candidate_metrics(mask, contour, area, largest_area, scoring_config, frame)
         score = weighted_candidate_score(metrics, scoring_config)
 
         candidates.append(
@@ -312,8 +345,10 @@ def score_candidates(
                 centroid=centroid,
                 area=area,
                 circularity=metrics.circularity,
+                circle_fit=metrics.circle_fit,
                 enclosing_fill=metrics.enclosing_fill,
                 solidity=metrics.solidity,
+                relative_area=metrics.relative_area,
                 color_fill=metrics.color_fill,
                 shading_score=metrics.shading_score,
                 score=score,
@@ -328,40 +363,102 @@ def candidate_metrics(
     mask: np.ndarray,
     contour: np.ndarray,
     area: float,
+    largest_area: float,
     scoring_config: ScoringConfig,
     frame: Optional[np.ndarray] = None,
 ) -> CandidateMetrics:
     return CandidateMetrics(
         area=area,
-        circularity=contour_circularity(contour),
-        enclosing_fill=enclosing_circle_fill(contour, area),
-        solidity=contour_solidity(contour, area),
-        color_fill=color_fill_score(mask, contour),
-        shading_score=shading_score(frame, contour, area, scoring_config),
+        circularity=contour_circularity(contour) if scoring_config.circularity_enabled else None,
+        circle_fit=circle_fit_score(contour) if scoring_config.circle_fit_enabled else None,
+        enclosing_fill=enclosing_circle_fill(contour, area) if scoring_config.enclosing_fill_enabled else None,
+        solidity=contour_solidity(contour, area) if scoring_config.solidity_enabled else None,
+        relative_area=relative_area_score(area, largest_area) if scoring_config.relative_area_enabled else None,
+        color_fill=color_fill_score(mask, contour) if scoring_config.color_fill_enabled else None,
+        shading_score=shading_score(frame, contour, area, scoring_config) if scoring_config.shading_enabled else None,
     )
 
 
 def weighted_candidate_score(metrics: CandidateMetrics, config: ScoringConfig) -> float:
-    weighted_sum = (
-        (metrics.color_fill * config.color_fill_weight)
-        + (metrics.circularity * config.circularity_weight)
-        + (metrics.enclosing_fill * config.enclosing_fill_weight)
-        + (metrics.solidity * config.solidity_weight)
-    )
-    weight_sum = (
-        config.color_fill_weight
-        + config.circularity_weight
-        + config.enclosing_fill_weight
-        + config.solidity_weight
-    )
+    weighted_sum = 0.0
+    weight_sum = 0.0
 
-    if config.shading_enabled and config.shading_weight > 0:
-        weighted_sum += metrics.shading_score * config.shading_weight
-        weight_sum += config.shading_weight
+    weighted_sum, weight_sum = add_weighted_component(
+        weighted_sum,
+        weight_sum,
+        metrics.color_fill,
+        config.color_fill_weight,
+    )
+    weighted_sum, weight_sum = add_weighted_component(
+        weighted_sum,
+        weight_sum,
+        metrics.circularity,
+        config.circularity_weight,
+    )
+    weighted_sum, weight_sum = add_weighted_component(
+        weighted_sum,
+        weight_sum,
+        metrics.circle_fit,
+        config.circle_fit_weight,
+    )
+    weighted_sum, weight_sum = add_weighted_component(
+        weighted_sum,
+        weight_sum,
+        metrics.enclosing_fill,
+        config.enclosing_fill_weight,
+    )
+    weighted_sum, weight_sum = add_weighted_component(
+        weighted_sum,
+        weight_sum,
+        metrics.solidity,
+        config.solidity_weight,
+    )
+    weighted_sum, weight_sum = add_weighted_component(
+        weighted_sum,
+        weight_sum,
+        metrics.relative_area,
+        config.relative_area_weight,
+    )
+    weighted_sum, weight_sum = add_weighted_component(
+        weighted_sum,
+        weight_sum,
+        metrics.shading_score,
+        config.shading_weight,
+    )
 
     if weight_sum <= 0:
         return 0.0
     return clamp01(weighted_sum / weight_sum)
+
+
+def add_weighted_component(
+    weighted_sum: float,
+    weight_sum: float,
+    value: Optional[float],
+    weight: float,
+) -> Tuple[float, float]:
+    if value is None or weight <= 0:
+        return weighted_sum, weight_sum
+    return weighted_sum + (value * weight), weight_sum + weight
+
+
+def active_weight_sum(config: ScoringConfig) -> float:
+    total = 0.0
+    if config.color_fill_enabled:
+        total += config.color_fill_weight
+    if config.circularity_enabled:
+        total += config.circularity_weight
+    if config.circle_fit_enabled:
+        total += config.circle_fit_weight
+    if config.enclosing_fill_enabled:
+        total += config.enclosing_fill_weight
+    if config.solidity_enabled:
+        total += config.solidity_weight
+    if config.relative_area_enabled:
+        total += config.relative_area_weight
+    if config.shading_enabled:
+        total += config.shading_weight
+    return total
 
 
 def find_external_contours(mask: np.ndarray) -> List[np.ndarray]:
@@ -392,6 +489,26 @@ def enclosing_circle_fill(contour: np.ndarray, area: float) -> float:
     if circle_area <= 0.0:
         return 0.0
     return clamp01(area / circle_area)
+
+
+def circle_fit_score(contour: np.ndarray) -> float:
+    if len(contour) < 3:
+        return 0.0
+
+    (center_x, center_y), radius = cv2.minEnclosingCircle(contour)
+    if radius <= 0.0:
+        return 0.0
+
+    points = contour.reshape(-1, 2).astype(np.float32)
+    distances = np.sqrt(((points[:, 0] - center_x) ** 2) + ((points[:, 1] - center_y) ** 2))
+    normalized_error = float(np.std(distances) / radius)
+    return clamp01(1.0 - normalized_error)
+
+
+def relative_area_score(area: float, largest_area: float) -> float:
+    if largest_area <= 0.0:
+        return 0.0
+    return clamp01(area / largest_area)
 
 
 def contour_solidity(contour: np.ndarray, area: float) -> float:
@@ -458,3 +575,9 @@ def shading_score(
 
 def clamp01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
+
+
+def format_score_value(value: Optional[float]) -> str:
+    if value is None:
+        return "off"
+    return f"{value:.2f}"

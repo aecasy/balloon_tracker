@@ -124,13 +124,14 @@ def draw_result(frame, result: DetectionResult, color: Tuple[int, int, int], lab
 
 def draw_candidate_table(frame, result: ScoredDetectionResult) -> None:
     rows = [
-        "rank area circ fill sol color shade score",
+        "rank area rel fit circ fill sol color shade score",
     ]
     for index, candidate in enumerate(result.candidates[:5], start=1):
         rows.append(
-            f"{index:>2} {candidate.area:>5.0f} {candidate.circularity:.2f} "
-            f"{candidate.enclosing_fill:.2f} {candidate.solidity:.2f} "
-            f"{candidate.color_fill:.2f} {candidate.shading_score:.2f} {candidate.score:.2f}"
+            f"{index:>2} {candidate.area:>5.0f} {format_metric(candidate.relative_area)} "
+            f"{format_metric(candidate.circle_fit)} {format_metric(candidate.circularity)} "
+            f"{format_metric(candidate.enclosing_fill)} {format_metric(candidate.solidity)} "
+            f"{format_metric(candidate.color_fill)} {format_metric(candidate.shading_score)} {candidate.score:.2f}"
         )
 
     draw_text_panel(frame, rows, origin=(10, 28))
@@ -139,7 +140,7 @@ def draw_candidate_table(frame, result: ScoredDetectionResult) -> None:
 def draw_text_panel(frame, lines: Iterable[str], origin: Tuple[int, int]) -> None:
     x, y = origin
     line_list = list(lines)
-    width = 390
+    width = 540
     height = 24 + (len(line_list) * 20)
     overlay = frame.copy()
     cv2.rectangle(overlay, (x - 6, y - 22), (x + width, y - 22 + height), (0, 0, 0), -1)
@@ -148,6 +149,12 @@ def draw_text_panel(frame, lines: Iterable[str], origin: Tuple[int, int]) -> Non
     for line in line_list:
         cv2.putText(frame, line, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (230, 235, 240), 1, cv2.LINE_AA)
         y += 20
+
+
+def format_metric(value) -> str:
+    if value is None:
+        return "off"
+    return f"{value:.2f}"
 
 
 if __name__ == "__main__":
