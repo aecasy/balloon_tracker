@@ -65,6 +65,12 @@ The immediate tracker output is:
 detected=<bool> dx=<int|None> dy=<int|None> area=<int> circularity=<float>
 ```
 
+The scored detector appends:
+
+```text
+score=<float> color_fill=<float> enclosing_fill=<float> solidity=<float> shading=<float>
+```
+
 Definitions:
 
 - `detected`: whether a valid target contour was found.
@@ -88,6 +94,18 @@ Definitions:
 11. Compute `dx` and `dy` from image center.
 12. Print one tracking line per frame.
 
+## Candidate Scoring
+
+The original legacy method selects the largest contour that passes area and circularity thresholds. The scored method ranks every candidate that passes the area cleanup gate using:
+
+- color fill inside the candidate
+- circularity
+- enclosing-circle fill
+- solidity
+- optional sphere-like shading score
+
+The scored method does not use a fixed radius or fixed object-size gate. Area is used only as the existing cleanup threshold and as a tie-breaker when candidates have equal scores.
+
 ## Tuning Workflow
 
 1. Run `python3 scripts/tune_tracker.py`.
@@ -98,6 +116,12 @@ Definitions:
 6. Hover over controls in the tuning window for help text.
 7. Press `s` to save the current settings to `config/green_tracker.json`.
 8. Run `python3 scripts/green_tracker.py`; it loads the saved config automatically.
+
+To compare old and new methods live, run:
+
+```bash
+python3 scripts/compare_trackers.py
+```
 
 ## Immediate Milestones
 

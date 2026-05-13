@@ -9,7 +9,7 @@ from typing import Any, Dict, Tuple
 
 from .camera import CameraConfig
 from .color_detector import HsvRange
-from .tracker import TrackerConfig
+from .tracker import ScoringConfig, TrackerConfig
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,7 @@ class AppConfig:
     hsv: HsvRange = field(default_factory=HsvRange)
     morphology: MorphologyConfig = field(default_factory=MorphologyConfig)
     tracker: TrackerConfig = field(default_factory=TrackerConfig)
+    scoring: ScoringConfig = field(default_factory=ScoringConfig)
 
 
 def default_config_path(project_root: Path) -> Path:
@@ -65,6 +66,7 @@ def app_config_from_dict(data: Dict[str, Any]) -> AppConfig:
     hsv_data = data.get("hsv", {})
     morphology_data = data.get("morphology", {})
     tracker_data = data.get("tracker", {})
+    scoring_data = data.get("scoring", {})
 
     return AppConfig(
         camera=CameraConfig(
@@ -87,6 +89,16 @@ def app_config_from_dict(data: Dict[str, Any]) -> AppConfig:
             min_area=float(tracker_data.get("min_area", 300.0)),
             min_circularity=float(tracker_data.get("min_circularity", 0.55)),
             smoothing_alpha=float(tracker_data.get("smoothing_alpha", 0.35)),
+        ),
+        scoring=ScoringConfig(
+            min_score=float(scoring_data.get("min_score", 0.55)),
+            color_fill_weight=float(scoring_data.get("color_fill_weight", 0.35)),
+            circularity_weight=float(scoring_data.get("circularity_weight", 0.25)),
+            enclosing_fill_weight=float(scoring_data.get("enclosing_fill_weight", 0.20)),
+            solidity_weight=float(scoring_data.get("solidity_weight", 0.15)),
+            shading_weight=float(scoring_data.get("shading_weight", 0.05)),
+            shading_enabled=bool(scoring_data.get("shading_enabled", False)),
+            shading_min_area=float(scoring_data.get("shading_min_area", 400.0)),
         ),
     )
 
@@ -113,7 +125,17 @@ def with_overrides(config: AppConfig, **overrides: Any) -> AppConfig:
         min_circularity=_value_or(config.tracker.min_circularity, overrides.get("min_circularity")),
         smoothing_alpha=_value_or(config.tracker.smoothing_alpha, overrides.get("smoothing_alpha")),
     )
-    return AppConfig(camera=camera, hsv=hsv, morphology=morphology, tracker=tracker)
+    scoring = ScoringConfig(
+        min_score=_value_or(config.scoring.min_score, overrides.get("min_score")),
+        color_fill_weight=_value_or(config.scoring.color_fill_weight, overrides.get("color_fill_weight")),
+        circularity_weight=_value_or(config.scoring.circularity_weight, overrides.get("circularity_weight")),
+        enclosing_fill_weight=_value_or(config.scoring.enclosing_fill_weight, overrides.get("enclosing_fill_weight")),
+        solidity_weight=_value_or(config.scoring.solidity_weight, overrides.get("solidity_weight")),
+        shading_weight=_value_or(config.scoring.shading_weight, overrides.get("shading_weight")),
+        shading_enabled=_value_or(config.scoring.shading_enabled, overrides.get("shading_enabled")),
+        shading_min_area=_value_or(config.scoring.shading_min_area, overrides.get("shading_min_area")),
+    )
+    return AppConfig(camera=camera, hsv=hsv, morphology=morphology, tracker=tracker, scoring=scoring)
 
 
 def _hsv_tuple(value: Any) -> Tuple[int, int, int]:

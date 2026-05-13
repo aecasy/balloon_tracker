@@ -19,5 +19,15 @@
     "min_area": 300.0,
     "min_circularity": 0.55,
     "smoothing_alpha": 0.35
+  },
+  "scoring": {
+    "min_score": 0.55,
+    "color_fill_weight": 0.35,
+    "circularity_weight": 0.25,
+    "enclosing_fill_weight": 0.2,
+    "solidity_weight": 0.15,
+    "shading_weight": 0.05,
+    "shading_enabled": false,
+    "shading_min_area": 400.0
   }
 }

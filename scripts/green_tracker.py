@@ -48,7 +48,7 @@ def main() -> int:
         focus=config.camera.focus,
         lens_position=config.camera.lens_position,
     )
-    tracker = TargetTracker(config.tracker)
+    tracker = TargetTracker(config.tracker, config.scoring)
     image_size = ImageSize(width=config.camera.width, height=config.camera.height)
 
     print(f"loaded_config={config_path}", flush=True)
@@ -64,8 +64,8 @@ def main() -> int:
                     close_iterations=config.morphology.close_iterations,
                     kernel_size=config.morphology.kernel_size,
                 )
-                result = tracker.update(mask, image_size)
-                print(result.to_log_line(), flush=True)
+                result = tracker.update(mask, image_size, frame=frame, method=args.method)
+                print(result.to_log_line(include_components=args.log_components), flush=True)
 
                 if args.display:
                     display_frame = frame.copy()
@@ -102,6 +102,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--close-iterations", type=int, default=None, help="temporary morphological close override")
     parser.add_argument("--focus", choices=["continuous", "manual", "none"], default=None, help="temporary focus mode override")
     parser.add_argument("--lens-position", type=float, default=None, help="temporary manual focus lens position override")
+    parser.add_argument("--method", choices=["legacy", "scored"], default="legacy", help="candidate selection method")
+    parser.add_argument("--log-components", action="store_true", help="include scored component values in output")
     parser.add_argument("--no-display", dest="display", action="store_false", help="disable OpenCV debug windows")
     parser.set_defaults(display=True)
     return parser.parse_args()

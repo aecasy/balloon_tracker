@@ -85,13 +85,27 @@ config/green_tracker.json
 
 Press `q` to quit.
 
+Compare the old and new candidate selection methods live:
+
+```bash
+python3 scripts/compare_trackers.py
+```
+
+In the comparison window, `legacy` is the old largest-valid-contour method and `scored` is the new weighted candidate scorer. The candidate table shows the top scored candidates and their component values.
+
 Green ball tracker:
 
 ```bash
 python3 scripts/green_tracker.py
 ```
 
-The tracker reads `config/green_tracker.json` by default. Use CLI flags only when you want a temporary override without changing the saved file.
+The tracker reads `config/green_tracker.json` by default. It still uses the legacy method unless you ask for the new scorer:
+
+```bash
+python3 scripts/green_tracker.py --method scored --log-components
+```
+
+Use CLI flags only when you want a temporary override without changing the saved file.
 
 Example with explicit settings:
 
@@ -159,6 +173,7 @@ scripts/
   cam_test.py
   green_tracker.py
   hsv_probe.py
+  compare_trackers.py
   tune_tracker.py
 src/
   vision_tracker/

@@ -28,14 +28,14 @@ from vision_tracker.config import (
     with_overrides,
 )
 from vision_tracker.geometry import ImageSize
-from vision_tracker.tracker import TargetTracker, TrackerConfig
+from vision_tracker.tracker import ScoringConfig, TargetTracker, TrackerConfig
 
 CONTROLS_WINDOW = "tracker controls"
 CAMERA_WINDOW = "camera"
 MASK_WINDOW = "mask"
 FOCUS_MODES = ("none", "continuous", "manual")
 PANEL_WIDTH = 760
-PANEL_HEIGHT = 920
+PANEL_HEIGHT = 1080
 
 
 @dataclass(frozen=True)
@@ -58,15 +58,16 @@ class ControlRow:
 
 
 class ControlPanel:
-    def __init__(self, config: AppConfig, max_area: int) -> None:
+    def __init__(self, config: AppConfig, max_area: int, show_hitboxes: bool = False) -> None:
         self.max_area = max_area
+        self.show_hitboxes = show_hitboxes
         self.specs = build_control_specs(max_area)
         self.values = initial_control_values(config)
         self.rows: List[ControlRow] = []
         self.hover_key: Optional[str] = None
         self.drag_key: Optional[str] = None
 
-        cv2.namedWindow(CONTROLS_WINDOW)
+        cv2.namedWindow(CONTROLS_WINDOW, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(CONTROLS_WINDOW, PANEL_WIDTH, PANEL_HEIGHT)
         cv2.setMouseCallback(CONTROLS_WINDOW, self.handle_mouse)
 
@@ -107,6 +108,16 @@ class ControlPanel:
                 min_circularity=self.value("circularity_pct") / 100.0,
                 smoothing_alpha=self.value("smoothing_pct") / 100.0,
             ),
+            scoring=ScoringConfig(
+                min_score=self.value("min_score_pct") / 100.0,
+                color_fill_weight=self.value("color_weight_pct") / 100.0,
+                circularity_weight=self.value("circularity_weight_pct") / 100.0,
+                enclosing_fill_weight=self.value("fill_weight_pct") / 100.0,
+                solidity_weight=self.value("solidity_weight_pct") / 100.0,
+                shading_weight=self.value("shading_weight_pct") / 100.0,
+                shading_enabled=bool(self.value("shading_enabled")),
+                shading_min_area=float(clamp(self.value("shading_min_area"), 0, self.max_area)),
+            ),
         )
 
     def draw(self, config: AppConfig) -> None:
@@ -121,13 +132,16 @@ class ControlPanel:
         for spec in self.specs:
             if spec.group != current_group:
                 current_group = spec.group
-                y += 12
+                y += 6
                 draw_group_header(canvas, current_group, y)
-                y += 32
+                y += 22
 
             row = self.draw_slider(canvas, spec, y)
             self.rows.append(row)
-            y += 36
+            y += 28
+
+        if self.show_hitboxes:
+            self.draw_hitboxes(canvas)
 
         self.draw_help(canvas, config)
         cv2.imshow(CONTROLS_WINDOW, canvas)
@@ -158,13 +172,17 @@ class ControlPanel:
         cv2.rectangle(canvas, (track_x, track_y), (knob_x, track_y + track_h), fill_color, -1)
         cv2.circle(canvas, (knob_x, track_y + track_h // 2), knob_radius, (235, 245, 238), -1)
 
-        label_rect = (label_x - 4, y - 22, track_x + track_w + 24, y + 12)
+        label_rect_x = label_x - 4
+        label_rect_y = y - 22
+        label_rect_w = (track_x + track_w + 24) - label_rect_x
+        label_rect_h = 34
+        label_rect = (label_rect_x, label_rect_y, label_rect_w, label_rect_h)
         track_rect = (track_x, track_y - 8, track_w, track_h + 16)
         return ControlRow(spec=spec, label_rect=label_rect, track_rect=track_rect)
 
     def draw_help(self, canvas: np.ndarray, config: AppConfig) -> None:
         x = 24
-        y = 790
+        y = 950
         w = 712
         h = 116
         cv2.rectangle(canvas, (x, y), (x + w, y + h), (48, 54, 60), -1)
@@ -183,11 +201,12 @@ class ControlPanel:
 
         summary = (
             f"Saved shape: HSV {config.hsv.lower}-{config.hsv.upper}, "
-            f"area {config.tracker.min_area:.0f}, circ {config.tracker.min_circularity:.2f}"
+            f"score {config.scoring.min_score:.2f}, area {config.tracker.min_area:.0f}"
         )
         cv2.putText(canvas, summary, (x + 14, y + 102), cv2.FONT_HERSHEY_SIMPLEX, 0.44, (150, 210, 170), 1)
 
     def handle_mouse(self, event: int, x: int, y: int, flags: int, param) -> None:
+        x, y = self.map_mouse_point(x, y)
         if event == cv2.EVENT_MOUSEMOVE:
             self.hover_key = self.key_at(x, y)
             if self.drag_key is not None:
@@ -198,6 +217,19 @@ class ControlPanel:
                 self.update_value_from_mouse(self.drag_key, x)
         elif event == cv2.EVENT_LBUTTONUP:
             self.drag_key = None
+
+    def map_mouse_point(self, x: int, y: int) -> Tuple[int, int]:
+        try:
+            _, _, displayed_w, displayed_h = cv2.getWindowImageRect(CONTROLS_WINDOW)
+        except (AttributeError, cv2.error):
+            return x, y
+
+        if displayed_w <= 0 or displayed_h <= 0:
+            return x, y
+
+        mapped_x = int(round(x * (PANEL_WIDTH / float(displayed_w))))
+        mapped_y = int(round(y * (PANEL_HEIGHT / float(displayed_h))))
+        return mapped_x, mapped_y
 
     def key_at(self, x: int, y: int) -> Optional[str]:
         for row in self.rows:
@@ -228,12 +260,17 @@ class ControlPanel:
             return f"{value} -> {effective}"
         if spec.key in {"circularity_pct", "smoothing_pct"}:
             return f"{value / 100.0:.2f}"
+        if spec.key.endswith("_pct"):
+            return f"{value / 100.0:.2f}"
         if spec.key == "lens_x100":
             return f"{value / 100.0:.2f}"
         return f"{value}{spec.value_suffix}"
 
     def value(self, key: str) -> int:
         return self.values[key]
+
+    def should_show_scores(self) -> bool:
+        return bool(self.values.get("show_scores", 1))
 
     def find_row(self, key: str) -> Optional[ControlRow]:
         for row in self.rows:
@@ -249,6 +286,12 @@ class ControlPanel:
                 return spec
         return None
 
+    def draw_hitboxes(self, canvas: np.ndarray) -> None:
+        for row in self.rows:
+            x, y, w, h = row.label_rect
+            color = (0, 180, 255) if row.spec.key == self.hover_key else (80, 80, 120)
+            cv2.rectangle(canvas, (x, y), (x + w, y + h), color, 1)
+
 
 def main() -> int:
     args = parse_args()
@@ -262,8 +305,8 @@ def main() -> int:
         lens_position=args.lens_position,
     )
 
-    panel = ControlPanel(config, args.max_area)
-    tracker = TargetTracker(config.tracker)
+    panel = ControlPanel(config, args.max_area, show_hitboxes=args.show_control_hitboxes)
+    tracker = TargetTracker(config.tracker, config.scoring)
     image_size = ImageSize(config.camera.width, config.camera.height)
 
     print(f"loaded_config={config_path}", flush=True)
@@ -277,6 +320,7 @@ def main() -> int:
             while True:
                 live_config = panel.read_config(config)
                 tracker.config = live_config.tracker
+                tracker.scoring_config = live_config.scoring
 
                 if (
                     live_config.camera.focus != last_focus
@@ -294,11 +338,13 @@ def main() -> int:
                     close_iterations=live_config.morphology.close_iterations,
                     kernel_size=live_config.morphology.kernel_size,
                 )
-                result = tracker.update(mask, image_size)
+                result = tracker.update(mask, image_size, frame=frame, method="scored")
 
                 display_frame = frame.copy()
                 draw_detection(display_frame, result)
                 draw_tuning_status(display_frame, live_config, result)
+                if panel.should_show_scores():
+                    draw_candidate_table(display_frame, result)
 
                 panel.draw(live_config)
                 cv2.imshow(CAMERA_WINDOW, display_frame)
@@ -331,6 +377,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--focus", choices=FOCUS_MODES, default=None, help="temporary focus mode override")
     parser.add_argument("--lens-position", type=float, default=None, help="temporary manual lens position override")
     parser.add_argument("--max-area", type=int, default=50000, help="maximum value for the min-area slider")
+    parser.add_argument("--show-control-hitboxes", action="store_true", help="draw control hitboxes for GUI debugging")
     return parser.parse_args()
 
 
@@ -410,6 +457,81 @@ def build_control_specs(max_area: int) -> List[ControlSpec]:
             "Centroid smoothing alpha. Higher follows motion faster; lower gives steadier but laggier output.",
         ),
         ControlSpec(
+            "min_score_pct",
+            "Min score",
+            "Scoring",
+            0,
+            100,
+            "Minimum weighted score required for the scored detector to accept a candidate.",
+        ),
+        ControlSpec(
+            "color_weight_pct",
+            "Color weight",
+            "Scoring",
+            0,
+            100,
+            "Weight for how completely green-filled the candidate is. This should usually be the strongest score.",
+        ),
+        ControlSpec(
+            "circularity_weight_pct",
+            "Round weight",
+            "Scoring",
+            0,
+            100,
+            "Weight for contour circularity. Useful, but noisy for tiny blobs, so avoid making it the only strong cue.",
+        ),
+        ControlSpec(
+            "fill_weight_pct",
+            "Fill weight",
+            "Scoring",
+            0,
+            100,
+            "Weight for contour area divided by enclosing-circle area. Helps reject thin or partial shapes.",
+        ),
+        ControlSpec(
+            "solidity_weight_pct",
+            "Solidity weight",
+            "Scoring",
+            0,
+            100,
+            "Weight for contour convexity. Helps reject jagged or fragmented green shapes.",
+        ),
+        ControlSpec(
+            "shading_enabled",
+            "Shading",
+            "Scoring",
+            0,
+            1,
+            "Optional sphere-lighting cue. Keep off until basic color and shape scoring are stable.",
+            choices=("off", "on"),
+        ),
+        ControlSpec(
+            "shading_weight_pct",
+            "Shade weight",
+            "Scoring",
+            0,
+            100,
+            "Weight for the experimental sphere shading cue. Keep this low.",
+        ),
+        ControlSpec(
+            "shading_min_area",
+            "Shade min area",
+            "Scoring",
+            0,
+            max_area,
+            "Below this contour area, shading returns neutral so far-away tiny targets are not punished.",
+            " px",
+        ),
+        ControlSpec(
+            "show_scores",
+            "Show scores",
+            "Scoring",
+            0,
+            1,
+            "Display the ranked scored candidates on the camera view.",
+            choices=("off", "on"),
+        ),
+        ControlSpec(
             "kernel",
             "Kernel",
             "Mask cleanup - advanced",
@@ -464,6 +586,15 @@ def initial_control_values(config: AppConfig) -> Dict[str, int]:
         "min_area": int(round(config.tracker.min_area)),
         "circularity_pct": int(round(config.tracker.min_circularity * 100.0)),
         "smoothing_pct": int(round(config.tracker.smoothing_alpha * 100.0)),
+        "min_score_pct": int(round(config.scoring.min_score * 100.0)),
+        "color_weight_pct": int(round(config.scoring.color_fill_weight * 100.0)),
+        "circularity_weight_pct": int(round(config.scoring.circularity_weight * 100.0)),
+        "fill_weight_pct": int(round(config.scoring.enclosing_fill_weight * 100.0)),
+        "solidity_weight_pct": int(round(config.scoring.solidity_weight * 100.0)),
+        "shading_enabled": 1 if config.scoring.shading_enabled else 0,
+        "shading_weight_pct": int(round(config.scoring.shading_weight * 100.0)),
+        "shading_min_area": int(round(config.scoring.shading_min_area)),
+        "show_scores": 1,
         "kernel": config.morphology.kernel_size,
         "open_iters": config.morphology.open_iterations,
         "close_iters": config.morphology.close_iterations,
@@ -487,6 +618,7 @@ def draw_tuning_status(frame: np.ndarray, config: AppConfig, result) -> None:
     lines = [
         "s: save  q: quit",
         result.to_log_line(),
+        f"score={getattr(result, 'score', 0.0):.2f} min={config.scoring.min_score:.2f}",
         f"HSV lower={config.hsv.lower} upper={config.hsv.upper}",
         (
             f"area>={config.tracker.min_area:.0f} "
@@ -505,6 +637,29 @@ def draw_tuning_status(frame: np.ndarray, config: AppConfig, result) -> None:
     for line in lines:
         cv2.putText(frame, line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
         y += 22
+
+
+def draw_candidate_table(frame: np.ndarray, result) -> None:
+    candidates = getattr(result, "candidates", ())
+    rows = ["rank area circ fill sol color shade score"]
+    for index, candidate in enumerate(candidates[:4], start=1):
+        rows.append(
+            f"{index:>2} {candidate.area:>5.0f} {candidate.circularity:.2f} "
+            f"{candidate.enclosing_fill:.2f} {candidate.solidity:.2f} "
+            f"{candidate.color_fill:.2f} {candidate.shading_score:.2f} {candidate.score:.2f}"
+        )
+
+    x = 10
+    y = 184
+    width = 390
+    height = 24 + (len(rows) * 20)
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x - 6, y - 22), (x + width, y - 22 + height), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.45, frame, 0.55, 0, frame)
+
+    for row in rows:
+        cv2.putText(frame, row, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (230, 235, 240), 1, cv2.LINE_AA)
+        y += 20
 
 
 def draw_group_header(canvas: np.ndarray, text: str, y: int) -> None:
