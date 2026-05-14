@@ -18,3 +18,14 @@ Future calibration workflow:
 5. Convert target centroid to yaw and pitch bearing angles.
 
 Do not add ROS publishing until this math is verified.
+
+Current project checkerboard:
+
+- 6 by 8 inner corners
+- 35.8 mm square size
+
+Calibration command:
+
+```bash
+python3 scripts/calibrate_camera.py --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8
+```

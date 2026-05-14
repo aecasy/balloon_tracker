@@ -12,3 +12,4 @@ env/
 *.mkv
 calibration/*.npz
 calibration/*.yaml
+config/camera_calibration.json

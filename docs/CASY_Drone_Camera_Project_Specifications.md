@@ -71,6 +71,12 @@ The scored detector appends:
 score=<float> color_fill=<float> enclosing_fill=<float> solidity=<float> shading=<float>
 ```
 
+After calibration, runtime output also includes:
+
+```text
+yaw_deg=<float|None> pitch_deg=<float|None>
+```
+
 Definitions:
 
 - `detected`: whether a valid target contour was found.
@@ -124,6 +130,16 @@ To compare old and new methods live, run:
 ```bash
 python3 scripts/compare_trackers.py
 ```
+
+## Calibration Workflow
+
+Use the project checkerboard defaults:
+
+```bash
+python3 scripts/calibrate_camera.py --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8
+```
+
+Capture 15-25 samples across the image and save `config/camera_calibration.json`. The runtime tracker loads this file by default and converts detected centroid pixels to yaw/pitch bearings.
 
 ## Immediate Milestones
 

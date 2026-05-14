@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import atan2, degrees
-from typing import Tuple
+from typing import Optional, Tuple
+
+from .calibration import CalibrationData
 
 
 @dataclass(frozen=True)
@@ -55,3 +57,62 @@ def pixel_to_bearing_degrees(
     yaw = degrees(atan2(dx, fx))
     pitch = degrees(atan2(dy, fy))
     return yaw, pitch
+
+
+def calibrated_pixel_to_bearing_degrees(
+    point: PixelPoint,
+    calibration: CalibrationData,
+    cv2_module=None,
+) -> Tuple[float, float]:
+    """Convert a pixel point to yaw/pitch using camera calibration data."""
+    normalized_x, normalized_y = normalized_camera_point(point, calibration, cv2_module=cv2_module)
+    yaw = degrees(atan2(normalized_x, 1.0))
+    pitch = degrees(atan2(-normalized_y, 1.0))
+    return yaw, pitch
+
+
+def normalized_camera_point(
+    point: PixelPoint,
+    calibration: CalibrationData,
+    cv2_module=None,
+) -> Tuple[float, float]:
+    """Return normalized camera coordinates, with distortion correction when cv2 is available."""
+    if cv2_module is False:
+        cv2_module = None
+        np = None
+    elif cv2_module is None:
+        try:
+            import cv2 as cv2_module
+            import numpy as np
+        except ImportError:
+            cv2_module = None
+            np = None
+    else:
+        import numpy as np
+
+    if cv2_module is not None:
+        camera_matrix = np.array(
+            [
+                [calibration.fx, 0.0, calibration.cx],
+                [0.0, calibration.fy, calibration.cy],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        )
+        distortion = np.array(calibration.distortion_coefficients, dtype=np.float64)
+        points = np.array([[[point.x, point.y]]], dtype=np.float64)
+        undistorted = cv2_module.undistortPoints(points, camera_matrix, distortion)
+        return float(undistorted[0, 0, 0]), float(undistorted[0, 0, 1])
+
+    normalized_x = (point.x - calibration.cx) / calibration.fx
+    normalized_y = (point.y - calibration.cy) / calibration.fy
+    return normalized_x, normalized_y
+
+
+def bearing_from_detection(
+    point: Optional[PixelPoint],
+    calibration: Optional[CalibrationData],
+) -> Tuple[Optional[float], Optional[float]]:
+    if point is None or calibration is None:
+        return None, None
+    return calibrated_pixel_to_bearing_degrees(point, calibration)

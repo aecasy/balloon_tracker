@@ -95,6 +95,24 @@ python3 scripts/compare_trackers.py
 
 In the comparison window, `legacy` is the old largest-valid-contour method and `scored` is the new weighted candidate scorer. The candidate table shows the top scored candidates and their component values.
 
+## Calibrate
+
+Once tracking is stable, calibrate the camera with the checkerboard before using yaw/pitch bearings.
+
+For your 6 by 8 inner-corner board with 35.8 mm squares:
+
+```bash
+python3 scripts/calibrate_camera.py --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8
+```
+
+Move the checkerboard through different parts of the image and tilt it at different angles. Press `c` when corners are detected to capture a sample. Capture at least 15-25 samples, then press `k` to calibrate and save:
+
+```text
+config/camera_calibration.json
+```
+
+Press `q` to quit.
+
 Green ball tracker:
 
 ```bash
@@ -106,6 +124,20 @@ The tracker reads `config/green_tracker.json` by default. It still uses the lega
 ```bash
 python3 scripts/green_tracker.py --method scored --log-components
 ```
+
+Run the final headless bearing output as JSON:
+
+```bash
+python3 scripts/green_tracker.py --method scored --output json --headless
+```
+
+If you need to run before calibration, pass:
+
+```bash
+python3 scripts/green_tracker.py --method scored --output json --headless --allow-uncalibrated
+```
+
+Without calibration, `yaw_deg` and `pitch_deg` are `null`.
 
 Use CLI flags only when you want a temporary override without changing the saved file.
 
@@ -173,6 +205,7 @@ config/
   green_tracker.json
 scripts/
   cam_test.py
+  calibrate_camera.py
   green_tracker.py
   hsv_probe.py
   compare_trackers.py
