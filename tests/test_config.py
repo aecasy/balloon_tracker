@@ -59,6 +59,23 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(config.scoring.solidity_enabled)
         self.assertTrue(config.scoring.relative_area_enabled)
 
+    def test_camera_raw_size_loads_from_config(self):
+        config = app_config_from_dict(
+            {
+                "camera": {
+                    "width": 1280,
+                    "height": 720,
+                    "raw_width": 2304,
+                    "raw_height": 1296,
+                }
+            }
+        )
+
+        self.assertEqual(config.camera.width, 1280)
+        self.assertEqual(config.camera.height, 720)
+        self.assertEqual(config.camera.raw_width, 2304)
+        self.assertEqual(config.camera.raw_height, 1296)
+
 
 if __name__ == "__main__":
     unittest.main()

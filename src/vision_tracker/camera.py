@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass(frozen=True)
 class CameraConfig:
     width: int = 640
     height: int = 480
+    raw_width: Optional[int] = None
+    raw_height: Optional[int] = None
     pixel_format: str = "RGB888"
     focus: str = "continuous"
     lens_position: float = 2.0
@@ -16,6 +19,12 @@ class CameraConfig:
     def __post_init__(self) -> None:
         if self.width <= 0 or self.height <= 0:
             raise ValueError("camera dimensions must be positive")
+        if (self.raw_width is None) != (self.raw_height is None):
+            raise ValueError("raw_width and raw_height must be set together")
+        if self.raw_width is not None and self.raw_width <= 0:
+            raise ValueError("raw_width must be positive")
+        if self.raw_height is not None and self.raw_height <= 0:
+            raise ValueError("raw_height must be positive")
         if self.focus not in {"continuous", "manual", "none"}:
             raise ValueError("focus must be one of: continuous, manual, none")
 
@@ -38,9 +47,13 @@ class PiCamera:
         from picamera2 import Picamera2
 
         self._picam2 = Picamera2()
-        camera_config = self._picam2.create_preview_configuration(
-            main={"size": (self.config.width, self.config.height), "format": self.config.pixel_format}
-        )
+        preview_options = {
+            "main": {"size": (self.config.width, self.config.height), "format": self.config.pixel_format}
+        }
+        if self.config.raw_width is not None and self.config.raw_height is not None:
+            preview_options["raw"] = {"size": (self.config.raw_width, self.config.raw_height)}
+
+        camera_config = self._picam2.create_preview_configuration(**preview_options)
         self._picam2.configure(camera_config)
         self._apply_focus_controls()
         self._picam2.start()

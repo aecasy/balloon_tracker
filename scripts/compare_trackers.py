@@ -30,6 +30,8 @@ def main() -> int:
         config,
         width=args.width,
         height=args.height,
+        raw_width=args.raw_width,
+        raw_height=args.raw_height,
         focus=args.focus,
         lens_position=args.lens_position,
     )
@@ -37,6 +39,8 @@ def main() -> int:
     camera_config = CameraConfig(
         width=config.camera.width,
         height=config.camera.height,
+        raw_width=config.camera.raw_width,
+        raw_height=config.camera.raw_height,
         pixel_format=config.camera.pixel_format,
         focus=config.camera.focus,
         lens_position=config.camera.lens_position,
@@ -96,6 +100,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--width", type=int, default=None, help="temporary camera image width override")
     parser.add_argument("--height", type=int, default=None, help="temporary camera image height override")
+    parser.add_argument("--raw-width", type=int, default=None, help="temporary raw sensor mode width override")
+    parser.add_argument("--raw-height", type=int, default=None, help="temporary raw sensor mode height override")
     parser.add_argument("--focus", choices=["continuous", "manual", "none"], default=None, help="temporary focus mode override")
     parser.add_argument("--lens-position", type=float, default=None, help="temporary manual focus lens position override")
     return parser.parse_args()

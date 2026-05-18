@@ -1,6 +1,6 @@
 # CASY Drone Camera Green Ball Tracker
 
-Raspberry Pi camera vision module for detecting a green ball target in live video. The current goal is stable 2D target detection: centroid, pixel offset from image center, detection flag, timestamp, and contour quality metrics.
+Raspberry Pi camera vision module for detecting a green ball target in live video. The current goal is stable target detection and calibrated bearing output: centroid, pixel offset from image center, detection flag, timestamp, contour quality metrics, and yaw/pitch angles relative to the camera optical axis.
 
 This stage intentionally uses classical vision only:
 
@@ -9,8 +9,10 @@ This stage intentionally uses classical vision only:
 - mask cleanup with morphology
 - contour filtering by area and circularity
 - centroid smoothing
+- optional checkerboard camera calibration
+- calibrated yaw/pitch bearing output
 
-ROS, calibration, and bearing-angle publishing come later.
+ROS publishing comes later. The current runtime emits text or JSON lines that are ready for a later ROS wrapper.
 
 ## Hardware
 
@@ -94,6 +96,117 @@ python3 scripts/compare_trackers.py
 ```
 
 In the comparison window, `legacy` is the old largest-valid-contour method and `scored` is the new weighted candidate scorer. The candidate table shows the top scored candidates and their component values.
+
+## Camera Field Of View
+
+The requested output size can affect the sensor mode Picamera2 chooses. A 4:3 output such as `640x480` may use a cropped view. To ask Camera Module 3 for a wide 16:9 sensor mode while still processing a smaller frame, pass a matching raw sensor size:
+
+```bash
+python3 scripts/cam_test.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296
+```
+
+Use the same camera geometry for tuning, calibration, and final runtime:
+
+```bash
+python3 scripts/tune_tracker.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296
+python3 scripts/calibrate_camera.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296 --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8
+python3 scripts/green_tracker.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296 --method scored --output json --headless
+```
+
+For lower CPU, try a smaller 16:9 processed frame with the same raw sensor mode:
+
+```bash
+python3 scripts/green_tracker.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --method scored
+```
+
+This can prevent accidental software cropping, but it cannot exceed the physical lens field of view. Camera Module 3 Standard is much narrower than Camera Module 3 Wide.
+
+## Candidate Scoring
+
+The legacy tracker chooses the largest contour that passes `min_area` and `min_circularity`. The scored tracker keeps the same HSV mask and contour pipeline, then ranks every valid contour with a weighted score. This helps choose the object that looks most ball-like instead of blindly choosing the largest or first valid green blob.
+
+Only enabled scoring components with positive weights participate in the final score:
+
+```text
+final_score = sum(component_score * component_weight) / sum(active_component_weights)
+```
+
+If a component is disabled, it is shown as `off` and ignored. If every component is disabled or every active weight is zero, scored detection returns no target. The selected candidate must also pass `min_score`.
+
+All component scores are clamped to the range `0.0` to `1.0`, where `1.0` is best.
+
+`color_fill`
+
+Measures how much of the contour's filled area is actually green in the HSV mask. The tracker creates a filled contour mask inside the contour bounding box, then counts green pixels inside it.
+
+```text
+color_fill = green_pixels_inside_contour / total_pixels_inside_contour
+```
+
+This is useful because the target should be mostly green. It can be more expensive than simple contour geometry because it inspects mask pixels inside the candidate region.
+
+`circularity`
+
+Measures the classic contour roundness score:
+
+```text
+circularity = 4 * pi * contour_area / perimeter^2
+```
+
+A perfect circle approaches `1.0`. Long, jagged, or irregular shapes score lower. This score is sensitive to contour noise, highlights, shadows, and partial occlusion, so it is useful but not always reliable by itself.
+
+`circle_fit`
+
+Measures how well the contour boundary fits around a circle. The tracker finds the minimum enclosing circle, measures the distance from each contour point to the circle center, then looks at how consistent those distances are.
+
+```text
+normalized_error = std(distance_from_center_to_each_contour_point) / radius
+circle_fit = 1 - normalized_error
+```
+
+A clean round object has contour points at similar radii, so the standard deviation is small and the score is high. An elongated object like a pen usually has a larger radius error and scores lower. This is often a stronger "ball-like outline" cue than plain circularity.
+
+`enclosing_fill`
+
+Measures how much of the candidate's minimum enclosing circle is filled by the contour area:
+
+```text
+enclosing_fill = contour_area / (pi * enclosing_circle_radius^2)
+```
+
+A filled circular blob scores high. Thin arcs, crescent shapes, and sparse irregular blobs score lower. This is scale-independent, so it does not reject far-away balls just because they are small.
+
+`solidity`
+
+Measures how completely the contour fills its convex hull:
+
+```text
+solidity = contour_area / convex_hull_area
+```
+
+Solid compact objects score near `1.0`. Shapes with dents, holes, or concave edges score lower. This helps reject broken mask fragments and irregular reflections, but a non-ball solid object can still score well here, so solidity should be combined with roundness scores.
+
+`relative_area`
+
+Compares each valid candidate's area against the largest valid candidate in the same frame:
+
+```text
+relative_area = candidate_area / largest_valid_candidate_area
+```
+
+This is not a fixed size gate. It only says, "among the green candidates already passing `min_area`, prefer the dominant one." That helps a real ball beat small green noise without preventing far-away ball detection.
+
+`shading`
+
+Optional experimental cue for sphere-like lighting. It inspects the HSV `V` channel inside the contour, estimates brightness smoothness from image gradients, and mixes that with brightness variation:
+
+```text
+smoothness = 1 - clamp(mean_gradient / 64)
+contrast = clamp(std(value_pixels) / 64)
+shading = (0.7 * smoothness) + (0.3 * contrast)
+```
+
+For very small candidates below `shading_min_area`, or when no frame is available, it returns neutral `0.5` so tiny far-away balls are not punished. This score is off by default because it costs more CPU and can be lighting-dependent.
 
 ## Calibrate
 
@@ -213,18 +326,16 @@ scripts/
 src/
   vision_tracker/
     __init__.py
+    calibration.py
     camera.py
     color_detector.py
     config.py
     geometry.py
     tracker.py
 tests/
+  test_calibration.py
+  test_config.py
   test_geometry.py
+  test_scoring.py
 requirements-notes.md
 ```
-
-## Calibration Placeholder
-
-The tracker currently reports pixel offsets only. After centroid tracking is stable, add camera calibration to estimate `fx`, `fy`, `cx`, `cy`, and distortion coefficients. Then convert centroid position into yaw and pitch bearing angles.
-
-For now, do not add ROS or calibration code until the green target detection is reliable under realistic lighting and distance changes.

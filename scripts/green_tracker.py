@@ -31,6 +31,8 @@ def main() -> int:
         config,
         width=args.width,
         height=args.height,
+        raw_width=args.raw_width,
+        raw_height=args.raw_height,
         focus=args.focus,
         lens_position=args.lens_position,
         lower_hsv=args.lower_hsv,
@@ -46,6 +48,8 @@ def main() -> int:
     camera_config = CameraConfig(
         width=config.camera.width,
         height=config.camera.height,
+        raw_width=config.camera.raw_width,
+        raw_height=config.camera.raw_height,
         pixel_format=config.camera.pixel_format,
         focus=config.camera.focus,
         lens_position=config.camera.lens_position,
@@ -104,6 +108,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--width", type=int, default=None, help="temporary camera image width override")
     parser.add_argument("--height", type=int, default=None, help="temporary camera image height override")
+    parser.add_argument("--raw-width", type=int, default=None, help="temporary raw sensor mode width override")
+    parser.add_argument("--raw-height", type=int, default=None, help="temporary raw sensor mode height override")
     parser.add_argument("--lower-hsv", type=parse_hsv_triplet, default=None, help="temporary lower HSV override: H,S,V")
     parser.add_argument("--upper-hsv", type=parse_hsv_triplet, default=None, help="temporary upper HSV override: H,S,V")
     parser.add_argument("--min-area", type=float, default=None, help="temporary minimum contour area override")

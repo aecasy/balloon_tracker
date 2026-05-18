@@ -21,6 +21,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Open a simple live camera preview.")
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=480)
+    parser.add_argument("--raw-width", type=int, default=None)
+    parser.add_argument("--raw-height", type=int, default=None)
     parser.add_argument("--focus", choices=["continuous", "manual", "none"], default="continuous")
     parser.add_argument("--lens-position", type=float, default=2.0)
     args = parser.parse_args()
@@ -28,6 +30,8 @@ def main() -> int:
     config = CameraConfig(
         width=args.width,
         height=args.height,
+        raw_width=args.raw_width,
+        raw_height=args.raw_height,
         focus=args.focus,
         lens_position=args.lens_position,
     )

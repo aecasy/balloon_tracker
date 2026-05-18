@@ -33,6 +33,8 @@ def main() -> int:
     camera_config = CameraConfig(
         width=args.width,
         height=args.height,
+        raw_width=args.raw_width,
+        raw_height=args.raw_height,
         focus=args.focus,
         lens_position=args.lens_position,
     )
@@ -116,6 +118,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-samples", type=int, default=15, help="minimum captured views before saving calibration")
     parser.add_argument("--width", type=int, default=640, help="camera image width")
     parser.add_argument("--height", type=int, default=480, help="camera image height")
+    parser.add_argument("--raw-width", type=int, default=None, help="raw sensor mode width")
+    parser.add_argument("--raw-height", type=int, default=None, help="raw sensor mode height")
     parser.add_argument("--focus", choices=["continuous", "manual", "none"], default="continuous", help="camera focus mode")
     parser.add_argument("--lens-position", type=float, default=2.0, help="manual focus lens position")
     parser.add_argument(

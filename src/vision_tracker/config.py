@@ -72,6 +72,8 @@ def app_config_from_dict(data: Dict[str, Any]) -> AppConfig:
         camera=CameraConfig(
             width=int(camera_data.get("width", 640)),
             height=int(camera_data.get("height", 480)),
+            raw_width=_optional_int(camera_data.get("raw_width")),
+            raw_height=_optional_int(camera_data.get("raw_height")),
             pixel_format=str(camera_data.get("pixel_format", "RGB888")),
             focus=str(camera_data.get("focus", "continuous")),
             lens_position=float(camera_data.get("lens_position", 2.0)),
@@ -115,6 +117,8 @@ def with_overrides(config: AppConfig, **overrides: Any) -> AppConfig:
     camera = CameraConfig(
         width=_value_or(config.camera.width, overrides.get("width")),
         height=_value_or(config.camera.height, overrides.get("height")),
+        raw_width=_value_or(config.camera.raw_width, overrides.get("raw_width")),
+        raw_height=_value_or(config.camera.raw_height, overrides.get("raw_height")),
         pixel_format=config.camera.pixel_format,
         focus=_value_or(config.camera.focus, overrides.get("focus")),
         lens_position=_value_or(config.camera.lens_position, overrides.get("lens_position")),
@@ -164,3 +168,9 @@ def _value_or(current: Any, override: Any) -> Any:
     if override is None:
         return current
     return override
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(value)

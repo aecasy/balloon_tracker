@@ -93,6 +93,8 @@ class ControlPanel:
             camera=CameraConfig(
                 width=base_config.camera.width,
                 height=base_config.camera.height,
+                raw_width=base_config.camera.raw_width,
+                raw_height=base_config.camera.raw_height,
                 pixel_format=base_config.camera.pixel_format,
                 focus=FOCUS_MODES[focus_index],
                 lens_position=self.value("lens_x100") / 100.0,
@@ -309,6 +311,8 @@ def main() -> int:
         config,
         width=args.width,
         height=args.height,
+        raw_width=args.raw_width,
+        raw_height=args.raw_height,
         focus=args.focus,
         lens_position=args.lens_position,
     )
@@ -382,6 +386,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--width", type=int, default=None, help="temporary camera width override")
     parser.add_argument("--height", type=int, default=None, help="temporary camera height override")
+    parser.add_argument("--raw-width", type=int, default=None, help="temporary raw sensor mode width override")
+    parser.add_argument("--raw-height", type=int, default=None, help="temporary raw sensor mode height override")
     parser.add_argument("--focus", choices=FOCUS_MODES, default=None, help="temporary focus mode override")
     parser.add_argument("--lens-position", type=float, default=None, help="temporary manual lens position override")
     parser.add_argument("--max-area", type=int, default=50000, help="maximum value for the min-area slider")
