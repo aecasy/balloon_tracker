@@ -105,7 +105,32 @@ The requested output size can affect the sensor mode Picamera2 chooses. A 4:3 ou
 python3 scripts/cam_test.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296
 ```
 
-Use the same camera geometry for tuning, calibration, and final runtime:
+If the view looks wider with this command, keep the raw mode. In testing, this recovered a wider horizontal field of view than the default `640x480` setup.
+
+Processing cost depends mostly on the `main` output size, not just the raw sensor size. For example, `1280x720` processes about three times as many pixels as `640x480`, so HSV masking, morphology, contour finding, scoring, and debug drawing all get heavier. For maximum field of view with lower CPU cost, keep the wide raw mode and use a smaller 16:9 processed frame:
+
+```bash
+python3 scripts/green_tracker.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --method scored --output json --headless
+```
+
+Good speed/detail tradeoffs:
+
+```text
+640x360   fastest, still wide field of view
+960x540   middle ground
+1280x720  sharper, slower
+```
+
+For best runtime efficiency:
+
+- use `--headless` for final runs
+- keep `shading_enabled` off unless actively testing it
+- keep `--raw-width 2304 --raw-height 1296` for the wide sensor readout
+- use the smallest 16:9 `--width` and `--height` that still detects the ball reliably
+- avoid unnecessarily large morphology kernel/open/close values
+- if CPU is still tight, disable heavier scoring components first, especially `shading` and then `color_fill`
+
+Use the same camera geometry for tuning, calibration, and final runtime. If you change `width`, `height`, `raw_width`, or `raw_height`, recalibrate before trusting `yaw_deg` and `pitch_deg`:
 
 ```bash
 python3 scripts/tune_tracker.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296
@@ -113,11 +138,15 @@ python3 scripts/calibrate_camera.py --width 1280 --height 720 --raw-width 2304 -
 python3 scripts/green_tracker.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296 --method scored --output json --headless
 ```
 
-For lower CPU, try a smaller 16:9 processed frame with the same raw sensor mode:
+Recommended efficient wide-FOV workflow:
 
 ```bash
-python3 scripts/green_tracker.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --method scored
+python3 scripts/tune_tracker.py --width 640 --height 360 --raw-width 2304 --raw-height 1296
+python3 scripts/calibrate_camera.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8
+python3 scripts/green_tracker.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --method scored --output json --headless
 ```
+
+After changing to a wider view, the ball may occupy fewer pixels than before. Retune `min_area` if the tracker starts missing far-away targets. HSV usually stays similar, but area thresholds and scoring weights may need a small adjustment.
 
 This can prevent accidental software cropping, but it cannot exceed the physical lens field of view. Camera Module 3 Standard is much narrower than Camera Module 3 Wide.
 
