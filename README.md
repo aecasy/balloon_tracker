@@ -130,7 +130,7 @@ For best runtime efficiency:
 - avoid unnecessarily large morphology kernel/open/close values
 - if CPU is still tight, disable heavier scoring components first, especially `shading` and then `color_fill`
 
-Use the same camera geometry for tuning, calibration, and final runtime. If you change `width`, `height`, `raw_width`, or `raw_height`, recalibrate before trusting `yaw_deg` and `pitch_deg`:
+Use the same camera geometry for tuning, calibration, and final runtime. If you change `width`, `height`, `raw_width`, or `raw_height`, recalibrate before trusting `yaw_deg` and `pitch_deg`. Do not use a `1280x720` calibration file for a `640x360` tracker run, even though both are 16:9; the calibration values are in pixels and depend on the exact output mode.
 
 ```bash
 python3 scripts/tune_tracker.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296
@@ -239,7 +239,7 @@ For very small candidates below `shading_min_area`, or when no frame is availabl
 
 ## Calibrate
 
-Once tracking is stable, calibrate each camera with the checkerboard before using yaw/pitch bearings. Calibration is tied to the exact camera geometry, so use the same `width`, `height`, `raw_width`, `raw_height`, and focus setup for tuning, calibration, and final tracking.
+Once tracking is stable, calibrate each camera with the checkerboard before using yaw/pitch bearings. Calibration is tied to the exact camera geometry, so use the same `width`, `height`, `raw_width`, `raw_height`, and focus setup for tuning, calibration, and final tracking. A calibration captured at `1280x720` is not interchangeable with a `640x360` tracker run unless you intentionally add and validate a calibration-scaling workflow.
 
 For your 6 by 8 inner-corner board with 35.8 mm squares:
 
