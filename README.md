@@ -239,7 +239,7 @@ For very small candidates below `shading_min_area`, or when no frame is availabl
 
 ## Calibrate
 
-Once tracking is stable, calibrate the camera with the checkerboard before using yaw/pitch bearings.
+Once tracking is stable, calibrate each camera with the checkerboard before using yaw/pitch bearings. Calibration is tied to the exact camera geometry, so use the same `width`, `height`, `raw_width`, `raw_height`, and focus setup for tuning, calibration, and final tracking.
 
 For your 6 by 8 inner-corner board with 35.8 mm squares:
 
@@ -247,13 +247,41 @@ For your 6 by 8 inner-corner board with 35.8 mm squares:
 python3 scripts/calibrate_camera.py --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8
 ```
 
-Move the checkerboard through different parts of the image and tilt it at different angles. Press `c` when corners are detected to capture a sample. Capture at least 15-25 samples, then press `k` to calibrate and save:
+For the recommended efficient wide-FOV setup:
+
+```bash
+python3 scripts/calibrate_camera.py \
+  --width 640 \
+  --height 360 \
+  --raw-width 2304 \
+  --raw-height 1296 \
+  --pattern-cols 6 \
+  --pattern-rows 8 \
+  --square-size-mm 35.8
+```
+
+In the calibration window:
+
+1. Show the checkerboard to the camera.
+2. Wait until corners are detected and drawn.
+3. Press `c` to capture a sample.
+4. Move and tilt the board around: center, corners, edges, closer, farther, and angled.
+5. Capture at least 15 samples, ideally 20-25.
+6. Press `k` to calibrate and save.
+7. Press `q` to quit.
+
+By default calibration saves to:
 
 ```text
 config/camera_calibration.json
 ```
 
-Press `q` to quit.
+When calibrating multiple cameras, save each camera separately so the next run does not overwrite the previous calibration:
+
+```bash
+python3 scripts/calibrate_camera.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8 --output config/camera_calibration_left.json
+python3 scripts/calibrate_camera.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8 --output config/camera_calibration_right.json
+```
 
 Green ball tracker:
 
@@ -271,6 +299,20 @@ Run the final headless bearing output as JSON:
 
 ```bash
 python3 scripts/green_tracker.py --method scored --output json --headless
+```
+
+Run with a specific camera calibration:
+
+```bash
+python3 scripts/green_tracker.py \
+  --width 640 \
+  --height 360 \
+  --raw-width 2304 \
+  --raw-height 1296 \
+  --method scored \
+  --output json \
+  --headless \
+  --calibration config/camera_calibration_left.json
 ```
 
 If you need to run before calibration, pass:
