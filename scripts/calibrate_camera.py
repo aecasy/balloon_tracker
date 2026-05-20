@@ -18,6 +18,7 @@ import numpy as np
 
 from vision_tracker.calibration import CalibrationData, default_calibration_path, save_calibration
 from vision_tracker.camera import CameraConfig, PiCamera
+from vision_tracker.streamer import FrameServer
 
 
 def main() -> int:
@@ -42,6 +43,10 @@ def main() -> int:
     print("Checkerboard calibration")
     print(f"pattern_cols={args.pattern_cols} pattern_rows={args.pattern_rows} square_size_mm={args.square_size_mm}")
     print("Press c to capture a detected board, k to calibrate/save, q to quit.")
+
+    streamer = None
+    if args.stream_port:
+        streamer = FrameServer(args.stream_port)
 
     try:
         with PiCamera(camera_config) as camera:
@@ -75,9 +80,14 @@ def main() -> int:
                     2,
                     cv2.LINE_AA,
                 )
-                cv2.imshow("calibration", display_frame)
+                
+                if streamer:
+                    streamer.send_frame("calibration", display_frame)
+                    key = streamer.get_key()
+                else:
+                    cv2.imshow("calibration", display_frame)
+                    key = cv2.waitKey(1) & 0xFF
 
-                key = cv2.waitKey(1) & 0xFF
                 if key == ord("c"):
                     if last_corners is None:
                         print("capture_skipped reason=no_checkerboard", flush=True)
@@ -106,6 +116,8 @@ def main() -> int:
         pass
     finally:
         cv2.destroyAllWindows()
+        if streamer:
+            streamer.close()
 
     return 0
 
@@ -122,6 +134,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--raw-height", type=int, default=None, help="raw sensor mode height")
     parser.add_argument("--focus", choices=["continuous", "manual", "none"], default="continuous", help="camera focus mode")
     parser.add_argument("--lens-position", type=float, default=2.0, help="manual focus lens position")
+    parser.add_argument("--stream-port", type=int, default=None, help="port to stream OpenCV frames over TCP")
     parser.add_argument(
         "--output",
         type=Path,

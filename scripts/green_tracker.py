@@ -21,6 +21,7 @@ from vision_tracker.color_detector import create_hsv_mask, parse_hsv_triplet
 from vision_tracker.config import default_config_path, load_app_config, with_overrides
 from vision_tracker.geometry import ImageSize, calibrated_pixel_to_bearing_degrees
 from vision_tracker.tracker import TargetTracker
+from vision_tracker.streamer import FrameServer
 
 
 def main() -> int:
@@ -68,6 +69,10 @@ def main() -> int:
     if calibration is not None:
         print(f"loaded_calibration={args.calibration.resolve()}", file=sys.stderr, flush=True)
 
+    streamer = None
+    if args.stream_port:
+        streamer = FrameServer(args.stream_port)
+
     try:
         with PiCamera(camera_config) as camera:
             while True:
@@ -86,14 +91,24 @@ def main() -> int:
                 if args.display:
                     display_frame = frame.copy()
                     draw_detection(display_frame, result, yaw_deg, pitch_deg)
-                    cv2.imshow("camera", display_frame)
-                    cv2.imshow("mask", mask)
-                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                    
+                    if streamer:
+                        streamer.send_frame("camera", display_frame)
+                        streamer.send_frame("mask", mask)
+                        key = streamer.get_key()
+                    else:
+                        cv2.imshow("camera", display_frame)
+                        cv2.imshow("mask", mask)
+                        key = cv2.waitKey(1) & 0xFF
+                        
+                    if key == ord("q"):
                         break
     except KeyboardInterrupt:
         pass
     finally:
         cv2.destroyAllWindows()
+        if streamer:
+            streamer.close()
 
     return 0
 
@@ -130,6 +145,7 @@ def parse_args() -> argparse.Namespace:
         help="camera calibration JSON file",
     )
     parser.add_argument("--allow-uncalibrated", action="store_true", help="run without yaw/pitch if calibration is missing")
+    parser.add_argument("--stream-port", type=int, default=None, help="port to stream OpenCV frames over TCP")
     parser.add_argument("--headless", action="store_true", help="disable OpenCV display windows")
     parser.add_argument("--no-display", dest="display", action="store_false", help="disable OpenCV debug windows")
     parser.set_defaults(display=True)
