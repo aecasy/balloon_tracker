@@ -386,27 +386,43 @@ When running on a headless OS (like Raspberry Pi OS Lite) where no desktop envir
 
 To run the ROS Noetic environment alongside the native vision tracker on a modern Raspberry Pi OS (which is required for the Camera Module 3 to function properly), we use Docker.
 
-### 1. Build the ROS Docker Image
+### 1. Install Docker on PiOS Lite
+If you are running a fresh PiOS Lite image, install Docker and configure your user permissions:
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+newgrp docker
+```
 
+### 2. Build the ROS Docker Image
 ```bash
 docker build -t casy-ros-node -f Dockerfile.ros .
 ```
 
-### 2. Run the ROS Master
-
+### 3. Run the ROS Master
+*(Note: If you have a newer Docker version installed from the script, use `docker compose` with a space instead of a hyphen).*
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-### 3. Run the Piped Tracker
-
-Run the native Python vision tracker and pipe its JSON output directly into the ROS publisher container:
-
+### 4. Run the Piped Tracker
+Run the native Python vision tracker and pipe its JSON output directly into the ROS publisher container. Because the standard output is piped, **this command will intentionally produce no terminal output**:
 ```bash
 python3 scripts/green_tracker.py --method scored --output json --headless | docker run -i --rm --network host casy-ros-node
 ```
 
-This node will publish `geometry_msgs/PointStamped` messages to the `/target_bearing` topic, where `x` is the yaw, `y` is the pitch, and `z` is `1.0` if detected (or `0.0` if not).
+### 5. Debugging ROS Topics
+Because `docker exec` does not automatically load the ROS environment variables, you cannot simply run `docker exec ... rostopic echo` directly. To make this easy, use the provided helper script in a **second terminal**:
+```bash
+# Make sure the script is executable first
+chmod +x scripts/ros_exec.sh
+
+# Verify coordinate stream
+./scripts/ros_exec.sh rostopic echo /target_bearing
+
+# Check publish rate (FPS)
+./scripts/ros_exec.sh rostopic hz /target_bearing
+```
 
 ## Tests
 
