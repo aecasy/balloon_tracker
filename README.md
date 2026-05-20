@@ -364,6 +364,24 @@ When the target is lost:
 detected=False dx=None dy=None area=0 circularity=0.00
 ```
 
+## Headless Remote Streaming
+
+When running on a headless OS (like Raspberry Pi OS Lite) where no desktop environment exists, OpenCV's native `imshow` windows will fail. To bypass this, the tracker has a built-in TCP streamer.
+
+1. **Start the Stream Server on the Pi:**
+   Run your tracker or calibration script with the `--stream-port` flag:
+   ```bash
+   python3 scripts/calibrate_camera.py --stream-port 5000
+   ```
+   *(or use `scripts/green_tracker.py --stream-port 5000`)*
+
+2. **Connect from Windows:**
+   On your Windows PC (or any machine with a GUI and OpenCV installed), run the viewer script:
+   ```bash
+   python scripts/remote_viewer.py --ip <RASPBERRY_PI_IP> --port 5000
+   ```
+   This will pop open an OpenCV window on your PC showing the live feed. Any keys you press in this window (like `c` for capture or `q` for quit) will be sent over the network to the script running on the Pi.
+
 ## ROS Docker Integration
 
 To run the ROS Noetic environment alongside the native vision tracker on a modern Raspberry Pi OS (which is required for the Camera Module 3 to function properly), we use Docker.
