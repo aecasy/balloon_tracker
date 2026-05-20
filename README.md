@@ -364,6 +364,32 @@ When the target is lost:
 detected=False dx=None dy=None area=0 circularity=0.00
 ```
 
+## ROS Docker Integration
+
+To run the ROS Noetic environment alongside the native vision tracker on a modern Raspberry Pi OS (which is required for the Camera Module 3 to function properly), we use Docker.
+
+### 1. Build the ROS Docker Image
+
+```bash
+docker build -t casy-ros-node -f Dockerfile.ros .
+```
+
+### 2. Run the ROS Master
+
+```bash
+docker-compose up -d
+```
+
+### 3. Run the Piped Tracker
+
+Run the native Python vision tracker and pipe its JSON output directly into the ROS publisher container:
+
+```bash
+python3 scripts/green_tracker.py --method scored --output json --headless | docker run -i --rm --network host casy-ros-node
+```
+
+This node will publish `geometry_msgs/PointStamped` messages to the `/target_bearing` topic, where `x` is the yaw, `y` is the pitch, and `z` is `1.0` if detected (or `0.0` if not).
+
 ## Tests
 
 The current automated tests cover camera-independent geometry helpers:

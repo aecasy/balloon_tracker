@@ -1,0 +1,8 @@
+version: '3'
+
+services:
+  roscore:
+    image: ros:noetic-ros-core-focal
+    network_mode: "host"
+    command: roscore
+    restart: unless-stopped

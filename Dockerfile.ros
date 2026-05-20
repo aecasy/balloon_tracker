@@ -1,0 +1,19 @@
+FROM ros:noetic-ros-base-focal
+
+# Install Python and dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    ros-noetic-rospy \
+    ros-noetic-geometry-msgs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up the application directory
+WORKDIR /app
+COPY src/ros_nodes /app/src/ros_nodes
+
+# Ensure the script is executable
+RUN chmod +x /app/src/ros_nodes/target_bearing_node.py
+
+# Command to run the node by default
+CMD ["python3", "/app/src/ros_nodes/target_bearing_node.py"]
