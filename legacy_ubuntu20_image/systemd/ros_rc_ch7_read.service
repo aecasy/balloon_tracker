@@ -1,0 +1,29 @@
+[Unit]
+Description=ROS RC CH7 reader (autonomy_enable publisher)
+After=network-online.target
+Wants=network-online.target
+
+# If you have MAVProxy as a service and want ordering, uncomment + fix name:
+# After=mavproxy.service
+# Wants=mavproxy.service
+
+[Service]
+Type=simple
+User=ubuntu
+
+Environment=ROS_MASTER_URI=http://192.168.1.154:11311
+Environment=ROS_IP=192.168.1.126
+Environment=PYTHONUNBUFFERED=1
+
+WorkingDirectory=/home/ubuntu
+
+ExecStart=/bin/bash -lc 'source /opt/ros/noetic/setup.bash && exec /usr/bin/python3 /home/ubuntu/ros_rc_ch7_read.py'
+
+Restart=on-failure
+RestartSec=2
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

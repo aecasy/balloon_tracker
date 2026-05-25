@@ -1,0 +1,25 @@
+[Unit]
+Description=ROS -> RC Override Bridge
+After=network-online.target mavproxy.service
+Requires=mavproxy.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+
+# Ensure ROS env exists even under systemd
+Environment=ROS_MASTER_URI=http://192.168.1.154:11311
+Environment=ROS_IP=192.168.1.126
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/bin/bash -lc 'source /opt/ros/noetic/setup.bash; exec /usr/bin/python3 -u /home/ubuntu/ros_rc_bridge.py'
+Restart=always
+RestartSec=1
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
