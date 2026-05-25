@@ -11,8 +11,10 @@ This stage intentionally uses classical vision only:
 - centroid smoothing
 - optional checkerboard camera calibration
 - calibrated yaw/pitch bearing output
+- optional TCP debug streaming for headless calibration/tuning
+- ROS Noetic bridge through Docker
 
-ROS publishing comes later. The current runtime emits text or JSON lines that are ready for a later ROS wrapper.
+The current deployment runs the camera tracker natively on Raspberry Pi OS Lite and pipes JSON output into a ROS Noetic Docker container. The container publishes calibrated yaw/pitch data on `/target_bearing`.
 
 ## Hardware
 
@@ -20,18 +22,64 @@ ROS publishing comes later. The current runtime emits text or JSON lines that ar
 - Raspberry Pi Camera Module 3
 - Green ball target
 
-## Current Bring-Up OS
+## Current Runtime Architecture
 
-Ubuntu 26.04 on Raspberry Pi 4.
+The Raspberry Pi Camera Module 3 requires the modern Raspberry Pi camera stack. The old Ubuntu 20.04 Server image used for ROS Noetic does not expose the IMX708 camera driver or overlay on its 5.4 Raspberry Pi kernel, so the camera cannot run there directly.
+
+Current deployment model:
+
+```text
+Raspberry Pi 4
+  Raspberry Pi OS Lite 64-bit host
+    Picamera2 / libcamera / rpicam-apps
+    native Python tracker
+    calibrated JSON bearing output
+    Docker engine
+      ROS Noetic container
+      /target_bearing publisher
+```
+
+The Windows development machine is used over SSH and for the optional remote OpenCV viewer.
 
 Install the camera and vision packages with apt:
 
 ```bash
 sudo apt update
-sudo apt install -y rpicam-apps python3-picamera2 python3-opencv
+sudo apt full-upgrade -y
+sudo apt install -y git rpicam-apps python3-picamera2 python3-opencv python3-numpy
 ```
 
-Do not install Picamera2 with plain system-wide pip on modern Ubuntu. Use `python3-picamera2` from apt.
+Do not install Picamera2 with plain system-wide pip. Use `python3-picamera2` from apt so it matches the Raspberry Pi camera stack.
+
+## Legacy Ubuntu 20.04 Image Migration
+
+The previous Ubuntu 20.04 Server image cannot be used as the host OS for Camera Module 3 capture, but its non-camera deployment pieces still matter. See `docs/Legacy_Ubuntu20_Scan.md` for the scanned services, scripts, topics, ports, and package clues.
+
+The image notes say it included:
+
+- startup Python script for MAVLink communication with the flight controller
+- startup Python script for RC channel 1-4 override gated by RC channel 7
+- startup Python script for Pi shutdown when RC channel 8 is high
+- ROS1 installation with a `catkin_ws` for Simulink connection
+- `micro` editor
+
+Those services need to be reproduced on the new Raspberry Pi OS Lite host or moved into Docker containers. Credentials and image backup details should stay in private notes, not in this repository.
+
+Migration target:
+
+```text
+camera tracker on Pi OS Lite host
+  -> /target_bearing in ROS Noetic Docker
+  -> MAVLink / flight-controller integration
+  -> Simulink-facing ROS connection to the remote Windows PC
+```
+
+## Roadmap
+
+1. Recreate the Ubuntu 20.04 image's MAVLink, RC override, shutdown, ROS, and Simulink-facing behavior on the Pi OS Lite + Docker deployment.
+2. Add boot automation for Docker ROS core and the piped tracker.
+3. Validate `/target_bearing` consumption by the flight-controller or Simulink control path.
+4. Last task: move from the current green-ball workflow to full-resolution tracking of the final red balloon target.
 
 ## Quick Checks
 
@@ -408,7 +456,16 @@ docker compose up -d
 ### 4. Run the Piped Tracker
 Run the native Python vision tracker and pipe its JSON output directly into the ROS publisher container. Because the standard output is piped, **this command will intentionally produce no terminal output**:
 ```bash
-python3 scripts/green_tracker.py --method scored --output json --headless | docker run -i --rm --network host casy-ros-node
+python3 scripts/green_tracker.py \
+  --width 1280 \
+  --height 720 \
+  --raw-width 2304 \
+  --raw-height 1296 \
+  --method scored \
+  --output json \
+  --headless \
+  --calibration config/camera_calibration_1280x720_raw2304x1296.json \
+  | docker run -i --rm --network host casy-ros-node
 ```
 
 ### 5. Debugging ROS Topics
@@ -441,20 +498,28 @@ python3 -m unittest discover -s tests
 ## Project Structure
 
 ```text
+Dockerfile.ros
+docker-compose.yml
 docs/
+  Agent_Handoff_Phase2.md
   CASY_Drone_Camera_Project_Specifications.md
   ChatGPT handoff.md
   calibration_notes.md
 config/
+  camera_calibration_1280x720_raw2304x1296.json
   green_tracker.json
 scripts/
   cam_test.py
   calibrate_camera.py
+  compare_trackers.py
   green_tracker.py
   hsv_probe.py
-  compare_trackers.py
+  remote_viewer.py
+  ros_exec.sh
   tune_tracker.py
 src/
+  ros_nodes/
+    target_bearing_node.py
   vision_tracker/
     __init__.py
     calibration.py
@@ -462,6 +527,7 @@ src/
     color_detector.py
     config.py
     geometry.py
+    streamer.py
     tracker.py
 tests/
   test_calibration.py
