@@ -50,3 +50,18 @@ systemd/
 ## Notes
 
 The copied service files preserve old IP assumptions such as `ROS_MASTER_URI=http://192.168.1.154:11311` and `ROS_IP=192.168.1.126`. Treat those as legacy references, not final values for the new Pi OS Lite deployment.
+
+During shutdown, the old image may print a message like `A stop job is running for MAVProxy Companion Link (UART) (... / 1min 30s)`. This is systemd waiting for `mavproxy.service` to stop. On the old image, that service runs `home/ubuntu/run_mavproxy.sh`, which starts MAVProxy on `/dev/ttyS0` at `921600` baud and writes telemetry logs under `/var/log/mavproxy/`.
+
+The old `systemd/mavproxy.service` does not define `TimeoutStopSec`, so systemd uses its default stop timeout, often around 90 seconds. The wait does not mean MAVProxy is expected to need that long; it means systemd is giving it a grace period before force-killing it.
+
+For a future or migrated MAVProxy service, set a shorter explicit stop timeout:
+
+```ini
+[Service]
+TimeoutStopSec=5
+KillSignal=SIGINT
+KillMode=control-group
+```
+
+If MAVProxy does not stop reliably with `SIGINT`, try `KillMode=mixed`.
