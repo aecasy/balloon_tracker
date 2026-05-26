@@ -74,6 +74,21 @@ camera tracker on Pi OS Lite host
   -> Simulink-facing ROS connection to the remote Windows PC
 ```
 
+The migrated Pi OS Lite deployment is configured to use the dedicated Ubuntu OptiTrack PC as ROS master:
+
+```text
+ROS_MASTER_URI=http://192.168.1.154:11311
+ROS_IP=192.168.1.168
+```
+
+Pi-specific deployment files live in `deploy/pi_os_lite/`. They include:
+
+- environment template for the new Pi network, camera, MAVLink, and tracker settings
+- native MAVProxy launcher for `/dev/serial0` at `921600`
+- native CH8 shutdown listener
+- Docker ROS bridge services for `quad_commands` RC override and CH7 `autonomy_enable`
+- systemd units for boot startup
+
 ## Roadmap
 
 1. Recreate the Ubuntu 20.04 image's MAVLink, RC override, shutdown, ROS, and Simulink-facing behavior on the Pi OS Lite + Docker deployment.
@@ -432,7 +447,7 @@ When running on a headless OS (like Raspberry Pi OS Lite) where no desktop envir
 
 ## ROS Docker Integration
 
-To run the ROS Noetic environment alongside the native vision tracker on a modern Raspberry Pi OS (which is required for the Camera Module 3 to function properly), we use Docker.
+To run ROS Noetic nodes alongside the native vision tracker on modern Raspberry Pi OS, use Docker. In the migrated flight setup, `roscore` runs on the dedicated Ubuntu OptiTrack PC at `192.168.1.154`; the Pi containers connect to that remote ROS master.
 
 ### 1. Install Docker on PiOS Lite
 If you are running a fresh PiOS Lite image, install Docker and configure your user permissions:
@@ -448,12 +463,23 @@ docker build -t casy-ros-node -f Dockerfile.ros .
 ```
 
 ### 3. Run the ROS Master
-*(Note: If you have a newer Docker version installed from the script, use `docker compose` with a space instead of a hyphen).*
+For the flight setup, start `roscore` on the Ubuntu OptiTrack PC, not on the Pi. For bench testing without the OptiTrack PC, the compose file still provides an optional local ROS master:
+
 ```bash
-docker compose up -d
+docker compose --profile bench up -d roscore
 ```
 
-### 4. Run the Piped Tracker
+### 4. Run the ROS Bridge Nodes
+
+With `/etc/casy-drone/pi_os_lite.env` present on the Pi:
+
+```bash
+docker compose --env-file /etc/casy-drone/pi_os_lite.env up rc-override rc-ch7
+```
+
+`rc-override` subscribes to `quad_commands` and sends MAVLink RC override through MAVProxy. `rc-ch7` reads RC channel 7 and publishes `autonomy_enable`.
+
+### 5. Run the Piped Tracker
 Run the native Python vision tracker and pipe its JSON output directly into the ROS publisher container. Because the standard output is piped, **this command will intentionally produce no terminal output**:
 ```bash
 python3 scripts/green_tracker.py \
@@ -465,11 +491,20 @@ python3 scripts/green_tracker.py \
   --output json \
   --headless \
   --calibration config/camera_calibration_1280x720_raw2304x1296.json \
-  | docker run -i --rm --network host casy-ros-node
+  | docker run -i --rm --network host \
+      -e ROS_MASTER_URI=http://192.168.1.154:11311 \
+      -e ROS_IP=192.168.1.168 \
+      casy-ros-node
 ```
 
-### 5. Debugging ROS Topics
-Because `docker exec` does not automatically load the ROS environment variables, you cannot simply run `docker exec ... rostopic echo` directly. To make this easy, use the provided helper script in a **second terminal**:
+The Pi OS Lite deployment wrapper runs the same pipeline with the configured remote ROS master:
+
+```bash
+deploy/pi_os_lite/run_tracker_pipeline.sh
+```
+
+### 6. Debugging ROS Topics
+Because `docker exec` does not automatically load the ROS environment variables, you cannot simply run `docker exec ... rostopic echo` directly. To make this easy, use the provided helper script in a **second terminal**. It uses a local `roscore` container when one is running, otherwise it starts a temporary `casy-ros-node` container with `/etc/casy-drone/pi_os_lite.env`.
 ```bash
 # Make sure the script is executable first
 chmod +x scripts/ros_exec.sh
@@ -480,6 +515,48 @@ chmod +x scripts/ros_exec.sh
 # Check publish rate (FPS)
 ./scripts/ros_exec.sh rostopic hz /target_bearing
 ```
+
+## Pi OS Lite Deployment
+
+On the new Pi (`casy@192.168.1.168`), pull the branch and install the migration support files:
+
+```bash
+cd ~/balloon_tracker
+git pull
+chmod +x deploy/pi_os_lite/*.sh
+deploy/pi_os_lite/install.sh
+```
+
+Log out and back in after `install.sh` so the `docker` group membership applies. Then review the environment file:
+
+```bash
+sudo nano /etc/casy-drone/pi_os_lite.env
+```
+
+Run the preflight checks before enabling boot services:
+
+```bash
+deploy/pi_os_lite/preflight.sh
+```
+
+With propellers removed, start services one at a time:
+
+```bash
+sudo systemctl enable --now casy-mavproxy.service
+sudo systemctl enable --now casy-ch8-shutdown.service
+sudo systemctl enable --now casy-ros-bridges.service
+sudo systemctl enable --now casy-tracker-pipeline.service
+```
+
+Useful logs:
+
+```bash
+journalctl -u casy-mavproxy.service -f
+journalctl -u casy-ros-bridges.service -f
+journalctl -u casy-tracker-pipeline.service -f
+```
+
+The copied Simulink-generated catkin packages are built into the ROS Docker image, but no generated Simulink node is auto-started yet. Choose and validate the active generated package before adding it to boot automation.
 
 ## Tests
 
@@ -500,6 +577,16 @@ python3 -m unittest discover -s tests
 ```text
 Dockerfile.ros
 docker-compose.yml
+deploy/
+  pi_os_lite/
+    pi_os_lite.env.example
+    install.sh
+    preflight.sh
+    run_mavproxy.sh
+    run_tracker_pipeline.sh
+    shutdown_on_ch8.py
+    sudoers.d/
+    systemd/
 docs/
   Agent_Handoff_Phase2.md
   CASY_Drone_Camera_Project_Specifications.md
@@ -519,6 +606,8 @@ scripts/
   tune_tracker.py
 src/
   ros_nodes/
+    ros_rc_bridge.py
+    ros_rc_ch7_read.py
     target_bearing_node.py
   vision_tracker/
     __init__.py
@@ -533,6 +622,7 @@ tests/
   test_calibration.py
   test_config.py
   test_geometry.py
+  test_pi_os_lite_migration.py
   test_scoring.py
 requirements-notes.md
 ```

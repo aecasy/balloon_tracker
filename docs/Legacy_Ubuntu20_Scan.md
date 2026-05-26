@@ -223,4 +223,15 @@ RC CH8 high hold -> Pi shutdown
 vision tracker -> /target_bearing -> future guidance/Simulink control path
 ```
 
-Open decision: whether to run MAVProxy and the small MAVLink bridge scripts natively on the Pi OS Lite host, in Docker, or split host/container responsibilities. Because MAVProxy touches serial hardware and shutdown touches host power state, those two are simplest to keep native unless there is a strong containerization reason.
+Resolved migration decision:
+
+```text
+MAVProxy: native on Pi OS Lite, /dev/serial0, 921600 baud
+CH8 shutdown listener: native on Pi OS Lite
+ROS master: dedicated Ubuntu OptiTrack PC at 192.168.1.154:11311
+Pi ROS identity: 192.168.1.168
+ROS MAVLink bridge nodes: Docker ROS Noetic containers
+Simulink-generated packages: build inside Docker, but do not auto-start yet
+```
+
+This split keeps serial and shutdown behavior on the host while keeping ROS Noetic dependencies inside the container.

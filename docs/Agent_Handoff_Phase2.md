@@ -8,13 +8,14 @@ The project relies on a hybrid execution model because the Raspberry Pi Camera M
 
 *   **Hardware:** Raspberry Pi 4, Raspberry Pi Camera Module 3, connected to a flight controller.
 *   **Host OS:** Raspberry Pi OS Lite (64-bit, headless Debian Bookworm). This runs the native Picamera2 libraries for maximum performance.
-*   **ROS Environment:** A Docker container (`ros:noetic-ros-base-focal`) running in host networking mode.
+*   **ROS Environment:** Docker containers (`ros:noetic-ros-base-focal`) running in host networking mode on the Pi, connected to the dedicated Ubuntu OptiTrack PC ROS master at `192.168.1.154:11311`.
 *   **Development Machine:** A Windows PC on the same local network, used for SSH and viewing the remote camera stream.
 
 ### The Pipeline
 1.  **Vision Node (`scripts/green_tracker.py`):** Runs natively on the PiOS host. Uses OpenCV HSV masking and candidate scoring to find a green target. Outputs JSON strings containing `x` (yaw), `y` (pitch), and `z` (1.0 = detected, 0.0 = lost).
 2.  **Pipe:** The JSON strings are piped via stdout directly into the Docker container.
-3.  **ROS Bridge (`src/ros_nodes/target_bearing_node.py`):** Runs inside the Docker container. Parses the JSON from `stdin` and publishes `geometry_msgs/PointStamped` messages to the `/target_bearing` topic.
+3.  **ROS Bridge (`src/ros_nodes/target_bearing_node.py`):** Runs inside the Docker container. Parses the JSON from `stdin` and publishes `geometry_msgs/PointStamped` messages to the `/target_bearing` topic on the remote ROS master.
+4.  **Legacy MAVLink Bridges:** `src/ros_nodes/ros_rc_bridge.py` subscribes to `quad_commands` and sends MAVLink RC override through MAVProxy. `src/ros_nodes/ros_rc_ch7_read.py` publishes `autonomy_enable` from RC channel 7.
 
 ## What Was Just Achieved (Phase 1)
 
@@ -30,9 +31,13 @@ The project relies on a hybrid execution model because the Raspberry Pi Camera M
 
 ## How to Run the System
 
-**1. Start ROS Core (On Pi)**
+**1. Confirm ROS Core (On Ubuntu OptiTrack PC)**
+`roscore` should be running at `192.168.1.154:11311`.
+
+For Pi-only bench testing, a local ROS master is still available:
+
 ```bash
-sudo docker compose up -d
+docker compose --profile bench up -d roscore
 ```
 
 **2. Start the Piped Tracker (On Pi)**
@@ -47,7 +52,10 @@ python3 scripts/green_tracker.py \
   --output json \
   --headless \
   --calibration config/camera_calibration_1280x720_raw2304x1296.json \
-  | sudo docker run -i --rm --network host casy-ros-node
+  | docker run -i --rm --network host \
+      -e ROS_MASTER_URI=http://192.168.1.154:11311 \
+      -e ROS_IP=192.168.1.168 \
+      casy-ros-node
 ```
 
 **3. Verify the ROS Topic (On Pi - Second Terminal)**
@@ -62,8 +70,8 @@ If you want to *see* what the tracker is doing, stop the pipeline above and run:
 
 ## Next Steps for the New Agent
 
-1.  **Flight Controller Integration:** The vision node successfully publishes `/target_bearing`. The next major milestone is subscribing to this topic from the flight controller or Simulink model to issue drone movement commands based on the yaw/pitch errors.
-2.  **Auto-Start:** Implement a systemd service to automatically launch the pipeline (`docker compose up -d` followed by the piped tracker script) on Pi boot so the drone is flyable without SSH.
+1.  **Flight Controller Integration:** Validate MAVProxy on `/dev/serial0`, RC override from `quad_commands`, and CH7/CH8 behavior with props removed.
+2.  **Auto-Start:** Install and enable the `deploy/pi_os_lite/systemd/` services after manual validation.
 3.  **Dynamic Reconfigure:** If the user wants to adjust tracker HSV parameters during flight, the tracker might need to pull parameters dynamically from a ROS service rather than loading a static JSON file on boot.
 
-All code is currently committed to the `feat/ros-docker` branch.
+Current working branch: `feat/ros-docker`.

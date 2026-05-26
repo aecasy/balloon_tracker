@@ -1,0 +1,17 @@
+[Unit]
+Description=CASY ROS Docker MAVLink Bridge Nodes
+After=network-online.target docker.service casy-mavproxy.service
+Wants=network-online.target docker.service casy-mavproxy.service
+
+[Service]
+Type=simple
+User=casy
+Environment=ENV_FILE=/etc/casy-drone/pi_os_lite.env
+EnvironmentFile=/etc/casy-drone/pi_os_lite.env
+ExecStart=/bin/bash -lc 'cd "$PROJECT_DIR" && exec docker compose --env-file "$ENV_FILE" up rc-override rc-ch7'
+ExecStop=/bin/bash -lc 'cd "$PROJECT_DIR" && docker compose --env-file "$ENV_FILE" stop rc-override rc-ch7'
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
