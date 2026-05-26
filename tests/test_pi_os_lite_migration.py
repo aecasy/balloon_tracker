@@ -61,6 +61,13 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("python3-serial", text)
         self.assertIn("pip3 install --no-cache-dir --no-deps pymavlink==2.4.49", text)
 
+    def test_install_script_uses_pip_retries_for_mavproxy_downloads(self):
+        text = (DEPLOY_DIR / "install.sh").read_text(encoding="utf-8")
+
+        self.assertIn("for attempt in 1 2 3 4 5", text)
+        self.assertIn("pip install --retries 10 --timeout 120 MAVProxy pymavlink pyserial", text)
+        self.assertIn("MAVProxy pymavlink pyserial", text)
+
     def test_ros_exec_can_use_remote_master_without_local_roscore_container(self):
         text = (PROJECT_ROOT / "scripts" / "ros_exec.sh").read_text(encoding="utf-8")
 

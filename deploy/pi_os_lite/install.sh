@@ -28,8 +28,18 @@ fi
 
 sudo mkdir -p /opt/casy-drone
 sudo python3 -m venv /opt/casy-drone/mavproxy-venv
-sudo /opt/casy-drone/mavproxy-venv/bin/pip install --upgrade pip
-sudo /opt/casy-drone/mavproxy-venv/bin/pip install MAVProxy pymavlink pyserial
+sudo /opt/casy-drone/mavproxy-venv/bin/pip install --retries 10 --timeout 120 --no-cache-dir --upgrade pip
+for attempt in 1 2 3 4 5; do
+  if sudo /opt/casy-drone/mavproxy-venv/bin/pip install --retries 10 --timeout 120 MAVProxy pymavlink pyserial; then
+    break
+  fi
+  if [ "$attempt" -eq 5 ]; then
+    echo "MAVProxy install failed after $attempt attempts." >&2
+    exit 1
+  fi
+  echo "MAVProxy install failed on attempt $attempt; retrying in 10 seconds..." >&2
+  sleep 10
+done
 sudo install -d -o casy -g casy -m 0755 /var/log/mavproxy
 
 sudo install -m 0644 deploy/pi_os_lite/sudoers.d/casy-shutdown /etc/sudoers.d/casy-shutdown
