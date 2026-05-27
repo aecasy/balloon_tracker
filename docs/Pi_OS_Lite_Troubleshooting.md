@@ -1,0 +1,233 @@
+# Pi OS Lite Migration Troubleshooting Log
+
+This file records the migration/debugging path from the old Ubuntu 20.04 Raspberry Pi image to the new Raspberry Pi OS Lite + ROS Docker deployment.
+
+Keep secrets, SD-card image backup locations, and Wi-Fi passwords out of this repo.
+
+## Active Network Assumptions
+
+```text
+Ubuntu OptiTrack ROS master: 192.168.1.154:11311
+New Pi OS Lite host:        casy@192.168.1.126 during latest testing
+Original planned Pi IP:     192.168.1.168
+Old Ubuntu 20.04 Pi scan:   ubuntu@192.168.1.167
+Ground MAVLink consumer:    192.168.1.115:14550
+```
+
+`/etc/casy-drone/pi_os_lite.env` on the Pi is the runtime source of truth for `ROS_IP`, UART, tracker, and MAVLink settings. The committed file `deploy/pi_os_lite/pi_os_lite.env.example` is only a template.
+
+## Ubuntu 20.04 Camera Dead End
+
+The original goal was to keep using the Ubuntu 20.04 Server Pi image, but Camera Module 3 was not usable there.
+
+Evidence gathered on the old Ubuntu 20.04 Pi:
+
+```text
+kernel: Linux 5.4.0-1129-raspi
+/boot/firmware/overlays/imx708.dtbo: missing
+modinfo imx708: no imx708 kernel module
+v4l2-ctl --list-devices: bcm2835-codec and bcm2835-isp only
+/dev/video0: missing
+dmesg: no imx708/unicam/csi camera detection
+```
+
+Package attempts did not solve the missing kernel/camera-stack support:
+
+```text
+apt install libcamera-apps: unable to locate package
+apt install rpicam-apps: unable to locate package
+media-ctl package: no installation candidate, but /usr/bin/media-ctl was already present
+```
+
+Conclusion: the 20.04 image remains useful as a migration reference, but not as the Camera Module 3 host OS. The camera path moved to Raspberry Pi OS Lite, where `rpicam-apps`, Picamera2, and the IMX708 stack are available.
+
+## Headless Display Behavior
+
+`rpicam-hello --timeout 2000` can show a preview when a real display session is available on the Pi, and it normally exits after the timeout.
+
+OpenCV/Qt windows fail on a headless SSH-only session. The calibration attempt failed with:
+
+```text
+qt.qpa.xcb: could not connect to display
+Could not load the Qt platform plugin "xcb"
+```
+
+Use one of these instead:
+
+- run calibration/tuning through the tracker `--stream-port` support and view it from Windows with `scripts/remote_viewer.py`
+- use X11 forwarding if a Windows X server is installed
+- run with a real display attached to the Pi
+
+## Legacy Image Capture
+
+The old Ubuntu 20.04 behavior was scanned and copied into `legacy_ubuntu20_image/`.
+
+Important findings:
+
+- `mavproxy.service` bridged FC UART `/dev/ttyS0` at `921600` baud into local UDP MAVLink ports and `udp:192.168.1.115:14550`.
+- `rc_override.service` mapped ROS `quad_commands` into MAVLink RC override.
+- `ros_rc_ch7_read.service` published RC channel 7 as `autonomy_enable`.
+- `ch8-shutdown.service` shut the Pi down after RC channel 8 stayed high for 1 second.
+- Simulink-generated catkin packages lived under `/home/ubuntu/catkin_ws/src`.
+
+The old shutdown delay message, `A stop job is running for MAVProxy Companion Link (UART)`, was systemd waiting for MAVProxy to stop. The old unit had no explicit short stop timeout, so systemd used its long default. The new unit sets `TimeoutStopSec=5`.
+
+## Docker And ROS Preflight
+
+The `casy` user must be in the `docker` group for manual Docker commands:
+
+```bash
+sudo usermod -aG docker casy
+```
+
+Log out and back in before testing `docker ps`.
+
+`deploy/pi_os_lite/preflight.sh` checks:
+
+- `rpicam-hello`
+- Picamera2 import
+- `/dev/serial0`
+- Docker access
+- `ROS_MASTER_URI` port reachability
+
+If `ping 192.168.1.154` works but preflight reports connection refused on `192.168.1.154:11311`, the network is reachable but `roscore` is not listening on the Ubuntu OptiTrack PC yet.
+
+## Git Pull Conflict On The Pi
+
+The Pi had a local edit to `deploy/pi_os_lite/install.sh`, so `git pull` refused to overwrite it.
+
+If the local Pi edit is disposable, discard that file and pull:
+
+```bash
+git restore deploy/pi_os_lite/install.sh
+git pull
+```
+
+Only use a broader reset when every local change on the Pi is known to be disposable.
+
+## MAVProxy Install Problems
+
+The Pi install hit intermittent PyPI download failures while fetching `MAVProxy-1.8.74`:
+
+```text
+ProtocolError: Connection broken: IncompleteRead(...)
+```
+
+The installer now retries the full MAVProxy install up to five times and uses pip network retries/timeouts.
+
+Runtime dependency fixes found during testing:
+
+```text
+ModuleNotFoundError: No module named 'future'
+```
+
+Fix: install `future` into `/opt/casy-drone/mavproxy-venv`.
+
+```text
+ModuleNotFoundError: No module named 'pkg_resources'
+```
+
+Fix: pin `setuptools<81` in the MAVProxy venv. Newer setuptools releases can install successfully but no longer provide the legacy runtime module MAVProxy expects.
+
+Verification command:
+
+```bash
+/opt/casy-drone/mavproxy-venv/bin/mavproxy.py --version
+```
+
+Expected result:
+
+```text
+MAVProxy Version: 1.8.74
+```
+
+A `pkg_resources is deprecated` warning is acceptable.
+
+## FC UART / MAVProxy Debugging
+
+Latest test date: 2026-05-27.
+
+Initial symptom before the FC was powered:
+
+```text
+Connect /dev/serial0 source_system=255
+Waiting for heartbeat from /dev/serial0
+link 1 down
+```
+
+This meant the Pi could open `/dev/serial0`, but no MAVLink heartbeat was arriving yet.
+
+After the FC was powered over USB-C and the service was restarted, the symptom changed:
+
+```text
+Failed to connect to /dev/serial0 : [Errno 13] Permission denied
+```
+
+Root cause evidence:
+
+```text
+serial-getty@ttyS0.service: active
+/boot/firmware/cmdline.txt contained console=serial0,115200
+/dev/serial0 -> ttyS0
+/dev/ttyS0 was crw------- root tty
+ps showed /bin/login attached to ttyS0
+```
+
+The Pi serial login console was still occupying the same UART pins needed for MAVLink.
+
+Fix applied on the Pi:
+
+```bash
+sudo systemctl stop casy-mavproxy.service
+sudo systemctl disable --now serial-getty@ttyS0.service
+sudo cp /boot/firmware/cmdline.txt /boot/firmware/cmdline.txt.bak-casy-serial-console
+sudo sed -i 's/console=serial0,115200[[:space:]]*//' /boot/firmware/cmdline.txt
+sudo chgrp dialout /dev/ttyS0
+sudo chmod 660 /dev/ttyS0
+sudo systemctl restart casy-mavproxy.service
+```
+
+Verify after reboot:
+
+```bash
+systemctl is-active serial-getty@ttyS0.service
+cat /boot/firmware/cmdline.txt
+ls -l /dev/serial0 /dev/ttyS0
+journalctl -u casy-mavproxy.service -n 50 --no-pager
+```
+
+Expected:
+
+- `serial-getty@ttyS0.service` is not active
+- `cmdline.txt` does not contain `console=serial0,115200`
+- `casy` has permission to open the serial device, usually through the `dialout` group
+- MAVProxy receives a heartbeat
+
+Successful verification output:
+
+```text
+Waiting for heartbeat from /dev/serial0
+Detected vehicle 1:1 on link 0
+online system 1
+STABILIZE> Mode STABILIZE
+AP: ArduCopter V4.6.3
+AP: KakuteH7
+Received 1251 parameters
+```
+
+Non-blocking notes from the same run:
+
+- `Failed to load module: No module named 'adsb'` is an optional MAVProxy module warning, not the UART blocker.
+- `PreArm: Battery 1 low voltage failsafe` is expected when the FC is USB-powered without the flight battery/ESC power path.
+- Keep propellers removed during MAVLink and RC override validation.
+- `casy-mavproxy.service` was intentionally left disabled for boot while validation continues.
+
+## Next Troubleshooting Targets
+
+After UART is stable:
+
+1. Test CH8 shutdown through `casy-ch8-shutdown.service`.
+2. Start Docker ROS bridge services and verify `autonomy_enable` changes with RC channel 7.
+3. Publish a safe `quad_commands` message containing zeros and confirm the RC override bridge sends MAVLink ignore values, not active overrides.
+4. Start the tracker pipeline and verify `/target_bearing` on the remote ROS master.
+5. Only then enable services for boot.

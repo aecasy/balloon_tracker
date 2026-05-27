@@ -16,6 +16,8 @@ This stage intentionally uses classical vision only:
 
 The current deployment runs the camera tracker natively on Raspberry Pi OS Lite and pipes JSON output into a ROS Noetic Docker container. The container publishes calibrated yaw/pitch data on `/target_bearing`.
 
+The living project specification is `docs/CASY_Drone_Camera_Project_Specifications.md`.
+
 ## Hardware
 
 - Raspberry Pi 4
@@ -53,7 +55,7 @@ Do not install Picamera2 with plain system-wide pip. Use `python3-picamera2` fro
 
 ## Legacy Ubuntu 20.04 Image Migration
 
-The previous Ubuntu 20.04 Server image cannot be used as the host OS for Camera Module 3 capture, but its non-camera deployment pieces still matter. See `docs/Legacy_Ubuntu20_Scan.md` for the scanned services, scripts, topics, ports, and package clues.
+The previous Ubuntu 20.04 Server image cannot be used as the host OS for Camera Module 3 capture, but its non-camera deployment pieces still matter. See `docs/Legacy_Ubuntu20_Scan.md` for the scanned services, scripts, topics, ports, and package clues. See `docs/Pi_OS_Lite_Troubleshooting.md` for the migration troubleshooting log, including the Ubuntu 20.04 camera dead end, MAVProxy venv dependency fixes, ROS master checks, and the Pi serial-console conflict that blocked FC UART access.
 
 The image notes say it included:
 
@@ -548,6 +550,8 @@ Run the preflight checks before enabling boot services:
 deploy/pi_os_lite/preflight.sh
 ```
 
+Before testing MAVProxy on `/dev/serial0`, make sure the Pi serial login console is disabled. If `serial-getty@ttyS0.service` is active or `/boot/firmware/cmdline.txt` contains `console=serial0,115200`, the login console can occupy the FC UART. The troubleshooting log has the exact fix and verification commands.
+
 With propellers removed, start services one at a time:
 
 ```bash
@@ -597,10 +601,10 @@ deploy/
     sudoers.d/
     systemd/
 docs/
-  Agent_Handoff_Phase2.md
   CASY_Drone_Camera_Project_Specifications.md
-  ChatGPT handoff.md
-  calibration_notes.md
+  Legacy_Ubuntu20_Scan.md
+  Pi_OS_Lite_Troubleshooting.md
+  archived/
 config/
   camera_calibration_1280x720_raw2304x1296.json
   green_tracker.json

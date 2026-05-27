@@ -13,6 +13,8 @@ kernel: 5.4.0-1129-raspi
 
 The files are kept here as reference material for porting the old MAVLink, RC override, shutdown, ROS, and Simulink behavior to the Raspberry Pi OS Lite + ROS Docker deployment.
 
+For the running migration/debug notes, including the Raspberry Pi OS Lite install issues and the FC UART serial-console fix, see `../docs/Pi_OS_Lite_Troubleshooting.md`.
+
 ## Contents
 
 ```text
