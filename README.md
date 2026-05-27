@@ -94,7 +94,8 @@ Pi-specific deployment files live in `deploy/pi_os_lite/`. They include:
 1. Recreate the Ubuntu 20.04 image's MAVLink, RC override, shutdown, ROS, and Simulink-facing behavior on the Pi OS Lite + Docker deployment.
 2. Add boot automation for Docker ROS core and the piped tracker.
 3. Validate `/target_bearing` consumption by the flight-controller or Simulink control path.
-4. Last task: move from the current green-ball workflow to full-resolution tracking of the final red balloon target.
+4. Future quality-of-life task: support `ROS_IP=auto` in the Pi OS Lite env file by resolving the local source IP used to reach `ROS_MASTER_URI`, parsing the value after `src` from `ip -4 route get <ros-master-host>`.
+5. Last task: move from the current green-ball workflow to full-resolution tracking of the final red balloon target.
 
 ## Quick Checks
 

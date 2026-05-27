@@ -65,8 +65,8 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         text = (DEPLOY_DIR / "install.sh").read_text(encoding="utf-8")
 
         self.assertIn("for attempt in 1 2 3 4 5", text)
-        self.assertIn("pip install --retries 10 --timeout 120 MAVProxy pymavlink pyserial", text)
-        self.assertIn("MAVProxy pymavlink pyserial", text)
+        self.assertIn("pip install --retries 10 --timeout 120 MAVProxy pymavlink pyserial future", text)
+        self.assertIn("MAVProxy pymavlink pyserial future", text)
 
     def test_ros_exec_can_use_remote_master_without_local_roscore_container(self):
         text = (PROJECT_ROOT / "scripts" / "ros_exec.sh").read_text(encoding="utf-8")
