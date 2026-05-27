@@ -64,7 +64,7 @@ class PiOsLiteMigrationTests(unittest.TestCase):
     def test_install_script_uses_pip_retries_for_mavproxy_downloads(self):
         text = (DEPLOY_DIR / "install.sh").read_text(encoding="utf-8")
 
-        self.assertIn("--upgrade pip setuptools", text)
+        self.assertIn("--upgrade pip 'setuptools<81'", text)
         self.assertIn("for attempt in 1 2 3 4 5", text)
         self.assertIn("pip install --retries 10 --timeout 120 MAVProxy pymavlink pyserial future", text)
         self.assertIn("MAVProxy pymavlink pyserial future", text)
