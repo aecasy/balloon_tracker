@@ -528,6 +528,14 @@ chmod +x deploy/pi_os_lite/*.sh
 deploy/pi_os_lite/install.sh
 ```
 
+`install.sh` creates a host-side MAVProxy virtual environment at `/opt/casy-drone/mavproxy-venv`. MAVProxy `1.8.74` still imports the legacy `pkg_resources` module, so the installer pins `setuptools<81`; newer setuptools releases may install successfully but fail at runtime with `ModuleNotFoundError: No module named 'pkg_resources'`.
+
+Quick MAVProxy runtime check:
+
+```bash
+/opt/casy-drone/mavproxy-venv/bin/mavproxy.py --version
+```
+
 Log out and back in after `install.sh` so the `docker` group membership applies. Then review the environment file:
 
 ```bash
