@@ -28,15 +28,19 @@
    - CH7 switch toggles `/autonomy_enable`
    - CH8 dry-run or controlled real shutdown still works
    - MAVProxy receives FC heartbeat and vehicle status
-5. Identify which Simulink-generated ROS package or node is the real active control program.
-6. Do not auto-start any Simulink-generated node until the active package is chosen and validated.
-7. Do a safe RC override bridge test with props off, starting with all-zero `quad_commands` and confirming ignored override values.
-8. Check Windows/Simulink integration against the remote ROS master.
-9. Update docs with final validation results:
+5. Determine the required locked camera mount angle on the drone before final flight validation.
+   - Verify the angle with the real drone geometry, target position, and expected flight attitude.
+   - Treat the camera mount as part of the tracking calibration setup: once the angle changes, re-check tracking and calibration assumptions.
+   - Design the physical mount so the camera cannot rotate or drift after the angle is chosen.
+6. Identify which Simulink-generated ROS package or node is the real active control program.
+7. Do not auto-start any Simulink-generated node until the active package is chosen and validated.
+8. Do a safe RC override bridge test with props off, starting with all-zero `quad_commands` and confirming ignored override values.
+9. Check Windows/Simulink integration against the remote ROS master.
+10. Update docs with final validation results:
    - `docs/Pi_OS_Lite_Troubleshooting.md`
    - `docs/CASY_Drone_Camera_Project_Specifications.md`
    - `README.md` if user-facing instructions changed
-10. Keep red balloon and full-resolution tracking as the final roadmap task after the migrated flight stack is stable.
+11. Keep red balloon and full-resolution tracking as the final roadmap task after the migrated flight stack is stable.
 
 ## Useful Commands
 
