@@ -38,6 +38,10 @@ def main() -> int:
         raw_height=args.raw_height,
         focus=args.focus,
         lens_position=args.lens_position,
+        awb_mode=args.awb_mode,
+        exposure_time=args.exposure_time,
+        analogue_gain=args.analogue_gain,
+        min_framerate=args.min_framerate,
     )
 
     print("Checkerboard calibration")
@@ -134,6 +138,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--raw-height", type=int, default=None, help="raw sensor mode height")
     parser.add_argument("--focus", choices=["continuous", "manual", "none"], default="continuous", help="camera focus mode")
     parser.add_argument("--lens-position", type=float, default=2.0, help="manual focus lens position")
+    parser.add_argument("--awb-mode", type=str, default="auto", help="camera AWB mode")
+    parser.add_argument("--exposure-time", type=int, default=0, help="camera exposure time in microseconds")
+    parser.add_argument("--analogue-gain", type=float, default=0.0, help="camera analogue gain")
+    parser.add_argument("--min-framerate", type=float, default=0.0, help="camera minimum framerate")
     parser.add_argument("--stream-port", type=int, default=None, help="port to stream OpenCV frames over TCP")
     parser.add_argument(
         "--output",

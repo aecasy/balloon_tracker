@@ -15,6 +15,10 @@ class CameraConfig:
     pixel_format: str = "RGB888"
     focus: str = "continuous"
     lens_position: float = 2.0
+    awb_mode: str = "auto"
+    exposure_time: int = 0
+    analogue_gain: float = 0.0
+    min_framerate: float = 0.0
 
     def __post_init__(self) -> None:
         if self.width <= 0 or self.height <= 0:
@@ -55,7 +59,7 @@ class PiCamera:
 
         camera_config = self._picam2.create_preview_configuration(**preview_options)
         self._picam2.configure(camera_config)
-        self._apply_focus_controls()
+        self._apply_camera_controls()
         self._picam2.start()
 
     def stop(self) -> None:
@@ -68,29 +72,67 @@ class PiCamera:
             raise RuntimeError("camera has not been started")
         return self._picam2.capture_array()
 
-    def _apply_focus_controls(self) -> None:
-        self.set_focus_controls(self.config.focus, self.config.lens_position)
+    def _apply_camera_controls(self) -> None:
+        self.set_camera_controls(
+            self.config.focus,
+            self.config.lens_position,
+            self.config.awb_mode,
+            self.config.exposure_time,
+            self.config.analogue_gain,
+            self.config.min_framerate,
+        )
 
-    def set_focus_controls(self, focus: str, lens_position: float) -> None:
+    def set_camera_controls(
+        self,
+        focus: str,
+        lens_position: float,
+        awb_mode: str = "auto",
+        exposure_time: int = 0,
+        analogue_gain: float = 0.0,
+        min_framerate: float = 0.0,
+    ) -> None:
         if self._picam2 is None:
             return
-
-        if focus == "none":
-            return
-        if focus not in {"continuous", "manual"}:
-            raise ValueError("focus must be one of: continuous, manual, none")
 
         try:
             from libcamera import controls
         except ImportError:
             return
 
+        ctrls = {}
+
         if focus == "continuous":
-            self._picam2.set_controls({"AfMode": controls.AfModeEnum.Continuous})
+            ctrls["AfMode"] = controls.AfModeEnum.Continuous
         elif focus == "manual":
-            self._picam2.set_controls(
-                {
-                    "AfMode": controls.AfModeEnum.Manual,
-                    "LensPosition": lens_position,
-                }
-            )
+            ctrls["AfMode"] = controls.AfModeEnum.Manual
+            ctrls["LensPosition"] = lens_position
+
+        if hasattr(controls, "AwbModeEnum"):
+            awb_map = {
+                "auto": controls.AwbModeEnum.Auto,
+                "incandescent": controls.AwbModeEnum.Incandescent,
+                "tungsten": controls.AwbModeEnum.Tungsten,
+                "fluorescent": controls.AwbModeEnum.Fluorescent,
+                "indoor": controls.AwbModeEnum.Indoor,
+                "daylight": controls.AwbModeEnum.Daylight,
+                "cloudy": controls.AwbModeEnum.Cloudy,
+                "custom": controls.AwbModeEnum.Custom,
+            }
+            if awb_mode in awb_map:
+                ctrls["AwbMode"] = awb_map[awb_mode]
+
+        if exposure_time > 0:
+            ctrls["AeEnable"] = False
+            ctrls["ExposureTime"] = exposure_time
+        else:
+            ctrls["AeEnable"] = True
+
+        if analogue_gain > 0.0:
+            ctrls["AnalogueGain"] = analogue_gain
+
+        if min_framerate > 0.0:
+            max_duration = int(1_000_000 / min_framerate)
+            ctrls["FrameDurationLimits"] = (100, max_duration)
+
+        if ctrls:
+            self._picam2.set_controls(ctrls)

@@ -44,6 +44,10 @@ def main() -> int:
         kernel_size=args.kernel_size,
         open_iterations=args.open_iterations,
         close_iterations=args.close_iterations,
+        awb_mode=args.awb_mode,
+        exposure_time=args.exposure_time,
+        analogue_gain=args.analogue_gain,
+        min_framerate=args.min_framerate,
     )
 
     camera_config = CameraConfig(
@@ -54,6 +58,10 @@ def main() -> int:
         pixel_format=config.camera.pixel_format,
         focus=config.camera.focus,
         lens_position=config.camera.lens_position,
+        awb_mode=config.camera.awb_mode,
+        exposure_time=config.camera.exposure_time,
+        analogue_gain=config.camera.analogue_gain,
+        min_framerate=config.camera.min_framerate,
     )
     tracker = TargetTracker(config.tracker, config.scoring)
     image_size = ImageSize(width=config.camera.width, height=config.camera.height)
@@ -135,6 +143,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--close-iterations", type=int, default=None, help="temporary morphological close override")
     parser.add_argument("--focus", choices=["continuous", "manual", "none"], default=None, help="temporary focus mode override")
     parser.add_argument("--lens-position", type=float, default=None, help="temporary manual focus lens position override")
+    parser.add_argument("--awb-mode", type=str, default=None, help="temporary AWB mode override (e.g. daylight)")
+    parser.add_argument("--exposure-time", type=int, default=None, help="temporary exposure time override in microseconds")
+    parser.add_argument("--analogue-gain", type=float, default=None, help="temporary analogue gain override")
+    parser.add_argument("--min-framerate", type=float, default=None, help="temporary minimum framerate override")
     parser.add_argument("--method", choices=["legacy", "scored"], default="legacy", help="candidate selection method")
     parser.add_argument("--log-components", action="store_true", help="include scored component values in output")
     parser.add_argument("--output", choices=["text", "json"], default="text", help="output format for each frame")

@@ -77,6 +77,10 @@ def app_config_from_dict(data: Dict[str, Any]) -> AppConfig:
             pixel_format=str(camera_data.get("pixel_format", "RGB888")),
             focus=str(camera_data.get("focus", "continuous")),
             lens_position=float(camera_data.get("lens_position", 2.0)),
+            awb_mode=str(camera_data.get("awb_mode", "auto")),
+            exposure_time=int(camera_data.get("exposure_time", 0)),
+            analogue_gain=float(camera_data.get("analogue_gain", 0.0)),
+            min_framerate=float(camera_data.get("min_framerate", 0.0)),
         ),
         hsv=HsvRange(
             lower=_hsv_tuple(hsv_data.get("lower", (68, 180, 20))),
@@ -122,6 +126,10 @@ def with_overrides(config: AppConfig, **overrides: Any) -> AppConfig:
         pixel_format=config.camera.pixel_format,
         focus=_value_or(config.camera.focus, overrides.get("focus")),
         lens_position=_value_or(config.camera.lens_position, overrides.get("lens_position")),
+        awb_mode=_value_or(config.camera.awb_mode, overrides.get("awb_mode")),
+        exposure_time=_value_or(config.camera.exposure_time, overrides.get("exposure_time")),
+        analogue_gain=_value_or(config.camera.analogue_gain, overrides.get("analogue_gain")),
+        min_framerate=_value_or(config.camera.min_framerate, overrides.get("min_framerate")),
     )
     hsv = HsvRange(
         lower=_value_or(config.hsv.lower, overrides.get("lower_hsv")),

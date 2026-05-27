@@ -34,8 +34,9 @@ CONTROLS_WINDOW = "tracker controls"
 CAMERA_WINDOW = "camera"
 MASK_WINDOW = "mask"
 FOCUS_MODES = ("none", "continuous", "manual")
+AWB_MODES = ("auto", "incandescent", "tungsten", "fluorescent", "indoor", "daylight", "cloudy", "custom")
 PANEL_WIDTH = 760
-PANEL_HEIGHT = 1260
+PANEL_HEIGHT = 1420
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ class ControlPanel:
             kernel_size += 1
 
         focus_index = int(clamp(self.value("focus_mode"), 0, len(FOCUS_MODES) - 1))
+        awb_index = int(clamp(self.value("awb_mode"), 0, len(AWB_MODES) - 1))
 
         return AppConfig(
             camera=CameraConfig(
@@ -98,6 +100,10 @@ class ControlPanel:
                 pixel_format=base_config.camera.pixel_format,
                 focus=FOCUS_MODES[focus_index],
                 lens_position=self.value("lens_x100") / 100.0,
+                awb_mode=AWB_MODES[awb_index],
+                exposure_time=self.value("exposure_time"),
+                analogue_gain=self.value("analogue_gain_x10") / 10.0,
+                min_framerate=float(self.value("min_framerate")),
             ),
             hsv=HsvRange(lower=lower, upper=upper),
             morphology=MorphologyConfig(
@@ -192,7 +198,7 @@ class ControlPanel:
 
     def draw_help(self, canvas: np.ndarray, config: AppConfig) -> None:
         x = 24
-        y = 1130
+        y = 1280
         w = 712
         h = 116
         cv2.rectangle(canvas, (x, y), (x + w, y + h), (48, 54, 60), -1)
@@ -274,6 +280,8 @@ class ControlPanel:
             return f"{value / 100.0:.2f}"
         if spec.key == "lens_x100":
             return f"{value / 100.0:.2f}"
+        if spec.key == "analogue_gain_x10":
+            return f"{value / 10.0:.1f}"
         return f"{value}{spec.value_suffix}"
 
     def value(self, key: str) -> int:
@@ -326,6 +334,10 @@ def main() -> int:
 
     last_focus = None
     last_lens_position = None
+    last_awb_mode = None
+    last_exposure_time = None
+    last_analogue_gain = None
+    last_min_framerate = None
 
     try:
         with PiCamera(config.camera) as camera:
@@ -337,10 +349,25 @@ def main() -> int:
                 if (
                     live_config.camera.focus != last_focus
                     or live_config.camera.lens_position != last_lens_position
+                    or live_config.camera.awb_mode != last_awb_mode
+                    or live_config.camera.exposure_time != last_exposure_time
+                    or live_config.camera.analogue_gain != last_analogue_gain
+                    or live_config.camera.min_framerate != last_min_framerate
                 ):
-                    camera.set_focus_controls(live_config.camera.focus, live_config.camera.lens_position)
+                    camera.set_camera_controls(
+                        live_config.camera.focus,
+                        live_config.camera.lens_position,
+                        live_config.camera.awb_mode,
+                        live_config.camera.exposure_time,
+                        live_config.camera.analogue_gain,
+                        live_config.camera.min_framerate,
+                    )
                     last_focus = live_config.camera.focus
                     last_lens_position = live_config.camera.lens_position
+                    last_awb_mode = live_config.camera.awb_mode
+                    last_exposure_time = live_config.camera.exposure_time
+                    last_analogue_gain = live_config.camera.analogue_gain
+                    last_min_framerate = live_config.camera.min_framerate
 
                 frame = camera.capture_array()
                 mask = create_hsv_mask(
@@ -656,6 +683,39 @@ def build_control_specs(max_area: int) -> List[ControlSpec]:
             1000,
             "Manual lens position. Only matters when focus mode is manual. Try small changes while watching sharpness.",
         ),
+        ControlSpec(
+            "awb_mode",
+            "AWB Mode",
+            "Camera exposure & color",
+            0,
+            len(AWB_MODES) - 1,
+            "Auto White Balance mode. Lock this (e.g. daylight) to stop colors from shifting mid-flight.",
+            choices=AWB_MODES,
+        ),
+        ControlSpec(
+            "exposure_time",
+            "Exposure (us)",
+            "Camera exposure & color",
+            0,
+            33000,
+            "Fixed exposure time in microseconds. 0 = Auto. Set low (e.g. 5000) to eliminate motion blur.",
+        ),
+        ControlSpec(
+            "analogue_gain_x10",
+            "Analog Gain",
+            "Camera exposure & color",
+            0,
+            160,
+            "Sensor gain (x10). 0 = Auto. If you lock exposure time, you may need to increase this.",
+        ),
+        ControlSpec(
+            "min_framerate",
+            "Min FPS",
+            "Camera exposure & color",
+            0,
+            120,
+            "Minimum framerate. 0 = None. Prevents the camera from dropping FPS in low light.",
+        ),
     ]
 
 
@@ -692,6 +752,10 @@ def initial_control_values(config: AppConfig) -> Dict[str, int]:
         "close_iters": config.morphology.close_iterations,
         "focus_mode": FOCUS_MODES.index(config.camera.focus),
         "lens_x100": int(round(config.camera.lens_position * 100.0)),
+        "awb_mode": AWB_MODES.index(config.camera.awb_mode) if config.camera.awb_mode in AWB_MODES else 0,
+        "exposure_time": config.camera.exposure_time,
+        "analogue_gain_x10": int(round(config.camera.analogue_gain * 10.0)),
+        "min_framerate": int(round(config.camera.min_framerate)),
     }
 
 
