@@ -14,6 +14,7 @@ UDP_PORT = int(os.getenv("MAVLINK_SHUTDOWN_PORT", "14552"))
 CH_OFF_THRESH = int(os.getenv("RC_CH8_SHUTDOWN_HIGH", "1900"))
 CH_ON_THRESH = int(os.getenv("RC_CH8_RESET_LOW", "1500"))
 HOLD_SEC = float(os.getenv("RC_CH8_HOLD_SEC", "1.0"))
+SUDO_COMMAND = os.getenv("SHUTDOWN_SUDO", "sudo").split()
 SHUTDOWN_COMMAND = os.getenv("SHUTDOWN_COMMAND", "/sbin/shutdown -h now").split()
 
 
@@ -51,7 +52,7 @@ def main() -> int:
                 high_since = time.monotonic()
 
             if time.monotonic() - high_since >= HOLD_SEC:
-                subprocess.run(["sudo", *SHUTDOWN_COMMAND], check=False)
+                subprocess.run([*SUDO_COMMAND, *SHUTDOWN_COMMAND], check=False)
                 return 0
 
         if not is_high:

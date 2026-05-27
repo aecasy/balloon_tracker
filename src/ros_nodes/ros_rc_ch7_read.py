@@ -6,7 +6,10 @@ from __future__ import annotations
 import os
 
 
-MAV_ENDPOINT = os.getenv("MAVLINK_RC_ENDPOINT", "udp:127.0.0.1:14552")
+MAV_ENDPOINT = os.getenv(
+    "MAVLINK_RC_CH7_ENDPOINT",
+    os.getenv("MAVLINK_RC_ENDPOINT", "udp:127.0.0.1:14551"),
+)
 TOPIC_NAME = os.getenv("AUTONOMY_ENABLE_TOPIC", "autonomy_enable")
 RATE_HZ = float(os.getenv("RC_CH7_RATE_HZ", "50.0"))
 HIGH_THRESH = int(os.getenv("RC_CH7_HIGH_THRESH", "1800"))

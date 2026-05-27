@@ -10,7 +10,10 @@ from typing import Iterable
 
 
 TOPIC_NAME = os.getenv("RC_OVERRIDE_TOPIC", "quad_commands")
-MAV_ENDPOINT = os.getenv("MAVLINK_RC_ENDPOINT", "udp:127.0.0.1:14552")
+MAV_ENDPOINT = os.getenv(
+    "MAVLINK_RC_OVERRIDE_ENDPOINT",
+    os.getenv("MAVLINK_RC_ENDPOINT", "udp:127.0.0.1:14552"),
+)
 RATE_HZ = float(os.getenv("RC_OVERRIDE_RATE_HZ", "50.0"))
 
 PWM_MIN = 1000

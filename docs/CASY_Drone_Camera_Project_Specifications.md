@@ -196,9 +196,13 @@ MAVProxy settings:
 FC UART: /dev/serial0
 baud: 921600
 ground output: udp:192.168.1.115:14550
-local outputs: udp:127.0.0.1:14551..14553
+local CH7 output: udp:127.0.0.1:14551
+local RC override output: udp:127.0.0.1:14552
+local CH8 shutdown output: udp:127.0.0.1:14553
 TCP input: tcpin:0.0.0.0:5760
 ```
+
+Each local MAVLink consumer uses a separate MAVProxy UDP output. Do not point CH7, RC override, and CH8 shutdown at the same local UDP port; only one process may receive a given UDP stream reliably.
 
 The Pi serial login console must be disabled before using `/dev/serial0` for MAVLink. See `docs/Pi_OS_Lite_Troubleshooting.md` for the exact checks and fix.
 

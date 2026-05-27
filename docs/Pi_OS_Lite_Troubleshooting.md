@@ -231,3 +231,108 @@ After UART is stable:
 3. Publish a safe `quad_commands` message containing zeros and confirm the RC override bridge sends MAVLink ignore values, not active overrides.
 4. Start the tracker pipeline and verify `/target_bearing` on the remote ROS master.
 5. Only then enable services for boot.
+
+## MAVProxy UDP Consumer Contention
+
+Latest test date: 2026-05-27.
+
+Symptom:
+
+```text
+/autonomy_enable existed on the remote ROS master and had publisher /rc_ch7_enable,
+but rostopic echo -n 1 /autonomy_enable produced no sample.
+rc-ch7 logs showed heartbeat received, but never logged Autonomy ENABLED/DISABLED.
+```
+
+Evidence:
+
+```text
+/target_bearing published normally at about 39 Hz.
+MAVProxy was active and receiving FC messages.
+A separate pymavlink probe connected to udp:127.0.0.1:14552 saw RC_CHANNELS at about 4 Hz.
+RC_CHANNELS included chan7_raw=982 and chan8_raw=982.
+```
+
+Root cause:
+
+```text
+Multiple local MAVLink consumers were configured to use the same MAVProxy UDP output, 127.0.0.1:14552:
+  rc-ch7
+  rc-override
+  CH8 shutdown listener
+  ad-hoc diagnostic probes
+```
+
+That is not a reliable broadcast pattern. Even when several processes can bind/connect, a single local UDP stream should not be treated as shared fan-out for independent consumers.
+
+Fix:
+
+```text
+MAVLINK_OUT_LOCAL_1=udp:127.0.0.1:14551 -> RC CH7 autonomy_enable
+MAVLINK_OUT_LOCAL_2=udp:127.0.0.1:14552 -> quad_commands RC override
+MAVLINK_OUT_LOCAL_3=udp:127.0.0.1:14553 -> CH8 shutdown listener
+```
+
+Repo changes:
+
+```text
+docker-compose.yml sets MAVLINK_RC_CH7_ENDPOINT and MAVLINK_RC_OVERRIDE_ENDPOINT separately.
+ros_rc_ch7_read.py reads MAVLINK_RC_CH7_ENDPOINT first.
+ros_rc_bridge.py reads MAVLINK_RC_OVERRIDE_ENDPOINT first.
+deploy/pi_os_lite/pi_os_lite.env.example assigns CH8 shutdown to port 14553.
+```
+
+After pulling these changes on an already-installed Pi, manually update `/etc/casy-drone/pi_os_lite.env` to match the split ports because `install.sh` does not overwrite an existing env file.
+
+Verification:
+
+```text
+After rebuilding/recreating the bridge containers, rc-ch7 connected to udp:127.0.0.1:14551.
+The node logged Autonomy DISABLED (CH7 = 982).
+Flipping the actual transmitter switch logged Autonomy ENABLED (CH7 = 2006), then Autonomy DISABLED (CH7 = 982).
+rostopic echo -n 1 /autonomy_enable returned data: False after returning the switch low.
+```
+
+## CH8 Shutdown Script Python Environment
+
+Latest test date: 2026-05-27.
+
+Symptom while running a non-destructive CH8 dry-run test:
+
+```text
+ModuleNotFoundError: No module named 'pymavlink'
+```
+
+Root cause:
+
+```text
+deploy/pi_os_lite/shutdown_on_ch8.py imports pymavlink.
+install.sh installs pymavlink into /opt/casy-drone/mavproxy-venv, not into the system Python.
+The original systemd unit used /usr/bin/python3.
+```
+
+Fix:
+
+```text
+casy-ch8-shutdown.service now runs:
+/opt/casy-drone/mavproxy-venv/bin/python deploy/pi_os_lite/shutdown_on_ch8.py
+```
+
+Dry-run test command:
+
+```bash
+MAVLINK_SHUTDOWN_PORT=14553 \
+SHUTDOWN_SUDO='' \
+SHUTDOWN_COMMAND='/bin/echo ch8-shutdown-dry-run' \
+timeout 25 \
+/opt/casy-drone/mavproxy-venv/bin/python deploy/pi_os_lite/shutdown_on_ch8.py
+```
+
+If `SHUTDOWN_SUDO` is not set, the script prepends `sudo`, which is the intended production behavior.
+
+Verification:
+
+```text
+Synthetic MAVLink CH8 low-to-high input triggered the dry-run command and printed ch8-shutdown-dry-run.
+The actual FC CH8 switch also triggered the dry-run command and printed ch8-shutdown-dry-run.
+```

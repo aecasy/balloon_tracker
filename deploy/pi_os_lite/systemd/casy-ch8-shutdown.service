@@ -8,7 +8,7 @@ Type=simple
 User=casy
 Environment=ENV_FILE=/etc/casy-drone/pi_os_lite.env
 EnvironmentFile=/etc/casy-drone/pi_os_lite.env
-ExecStart=/bin/bash -lc 'cd "$PROJECT_DIR" && exec /usr/bin/python3 deploy/pi_os_lite/shutdown_on_ch8.py'
+ExecStart=/bin/bash -lc 'cd "$PROJECT_DIR" && exec /opt/casy-drone/mavproxy-venv/bin/python deploy/pi_os_lite/shutdown_on_ch8.py'
 Restart=always
 RestartSec=1
 

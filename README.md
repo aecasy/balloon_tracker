@@ -91,6 +91,14 @@ Pi-specific deployment files live in `deploy/pi_os_lite/`. They include:
 - Docker ROS bridge services for `quad_commands` RC override and CH7 `autonomy_enable`
 - systemd units for boot startup
 
+The local MAVProxy UDP outputs are intentionally split by consumer so multiple listeners do not contend for the same UDP stream:
+
+```text
+127.0.0.1:14551  RC CH7 -> autonomy_enable
+127.0.0.1:14552  quad_commands -> RC override
+127.0.0.1:14553  RC CH8 shutdown listener
+```
+
 ## Roadmap
 
 1. Recreate the Ubuntu 20.04 image's MAVLink, RC override, shutdown, ROS, and Simulink-facing behavior on the Pi OS Lite + Docker deployment.

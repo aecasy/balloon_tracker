@@ -28,6 +28,9 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("FC_UART=/dev/serial0", text)
         self.assertIn("MAVLINK_BAUD=921600", text)
         self.assertIn("MAVLINK_OUT_GROUND=udp:192.168.1.115:14550", text)
+        self.assertIn("MAVLINK_RC_CH7_ENDPOINT=udp:127.0.0.1:14551", text)
+        self.assertIn("MAVLINK_RC_OVERRIDE_ENDPOINT=udp:127.0.0.1:14552", text)
+        self.assertIn("MAVLINK_SHUTDOWN_PORT=14553", text)
         self.assertIn("TRACKER_WIDTH=1280", text)
         self.assertIn("TRACKER_HEIGHT=720", text)
         self.assertIn("TRACKER_RAW_WIDTH=2304", text)
@@ -43,6 +46,17 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("KillSignal=SIGINT", text)
         self.assertIn("KillMode=control-group", text)
 
+    def test_ch8_shutdown_service_uses_mavproxy_venv_python(self):
+        text = (DEPLOY_DIR / "systemd" / "casy-ch8-shutdown.service").read_text(encoding="utf-8")
+
+        self.assertIn("/opt/casy-drone/mavproxy-venv/bin/python deploy/pi_os_lite/shutdown_on_ch8.py", text)
+
+    def test_ch8_shutdown_script_supports_dry_run_without_sudo(self):
+        text = (DEPLOY_DIR / "shutdown_on_ch8.py").read_text(encoding="utf-8")
+
+        self.assertIn('SUDO_COMMAND = os.getenv("SHUTDOWN_SUDO", "sudo").split()', text)
+        self.assertIn("subprocess.run([*SUDO_COMMAND, *SHUTDOWN_COMMAND], check=False)", text)
+
     def test_docker_compose_uses_remote_ros_master_for_default_services(self):
         text = (PROJECT_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
@@ -51,6 +65,8 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("target-bearing:", text)
         self.assertIn("rc-override:", text)
         self.assertIn("rc-ch7:", text)
+        self.assertIn("MAVLINK_RC_OVERRIDE_ENDPOINT: ${MAVLINK_RC_OVERRIDE_ENDPOINT:-udp:127.0.0.1:14552}", text)
+        self.assertIn("MAVLINK_RC_CH7_ENDPOINT: ${MAVLINK_RC_CH7_ENDPOINT:-udp:127.0.0.1:14551}", text)
         self.assertIn("profiles: [\"bench\"]", text)
 
     def test_dockerfile_uses_apt_lxml_and_no_deps_pymavlink_install(self):

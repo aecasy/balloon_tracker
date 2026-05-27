@@ -11,7 +11,6 @@ services:
     environment: &ros_env
       ROS_MASTER_URI: ${ROS_MASTER_URI:-http://192.168.1.154:11311}
       ROS_IP: ${ROS_IP:-192.168.1.168}
-      MAVLINK_RC_ENDPOINT: ${MAVLINK_RC_ENDPOINT:-udp:127.0.0.1:14552}
       RC_OVERRIDE_TOPIC: ${RC_OVERRIDE_TOPIC:-quad_commands}
       AUTONOMY_ENABLE_TOPIC: ${AUTONOMY_ENABLE_TOPIC:-autonomy_enable}
       RC_CH7_HIGH_THRESH: ${RC_CH7_HIGH_THRESH:-1800}
@@ -24,14 +23,18 @@ services:
   rc-override:
     <<: *ros_node_build
     network_mode: "host"
-    environment: *ros_env
+    environment:
+      <<: *ros_env
+      MAVLINK_RC_OVERRIDE_ENDPOINT: ${MAVLINK_RC_OVERRIDE_ENDPOINT:-udp:127.0.0.1:14552}
     command: python3 /app/src/ros_nodes/ros_rc_bridge.py
     restart: unless-stopped
 
   rc-ch7:
     <<: *ros_node_build
     network_mode: "host"
-    environment: *ros_env
+    environment:
+      <<: *ros_env
+      MAVLINK_RC_CH7_ENDPOINT: ${MAVLINK_RC_CH7_ENDPOINT:-udp:127.0.0.1:14551}
     command: python3 /app/src/ros_nodes/ros_rc_ch7_read.py
     restart: unless-stopped
 
