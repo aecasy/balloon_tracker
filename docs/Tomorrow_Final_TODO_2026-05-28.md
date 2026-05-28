@@ -10,6 +10,19 @@
 - The brief ARM/DISARM events seen in MAVProxy logs were intentional manual actions, not unexpected system behavior.
 - Props must remain removed during tomorrow's control and shutdown checks.
 
+## 2026-05-28 Progress
+
+- Pi repo is clean after tracking the deploy scripts as executable.
+- All four systemd services are enabled and active.
+- `deploy/pi_os_lite/preflight.sh` passed.
+- MAVProxy/FC link is healthy: heartbeat received, disarmed, `ALT_HOLD`, about 24.6 V, 98 percent battery, and zero MAVLink comm errors.
+- `/target_bearing` publishes at about 52 Hz with one live publisher after stale ROS node cleanup.
+- `/autonomy_enable` currently publishes `False`.
+- `/quad_commands` has `/ros_rc_bridge` subscribed.
+- A safe all-zero `/quad_commands` publish completed; the FC remained disarmed.
+- OptiTrack topics were not visible on the remote ROS master during this check.
+- Active Simulink-generated control package is still not positively identified.
+
 ## Tomorrow Checklist
 
 1. Clean the Pi repo working tree if remaining changes are only chmod or mode leftovers.

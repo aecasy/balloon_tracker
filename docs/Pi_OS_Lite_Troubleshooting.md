@@ -336,3 +336,75 @@ Verification:
 Synthetic MAVLink CH8 low-to-high input triggered the dry-run command and printed ch8-shutdown-dry-run.
 The actual FC CH8 switch also triggered the dry-run command and printed ch8-shutdown-dry-run.
 ```
+
+## Post-Reboot Service Validation
+
+Latest test date: 2026-05-28.
+
+The Pi repo initially looked dirty after yesterday's install work:
+
+```text
+M deploy/pi_os_lite/install.sh
+M deploy/pi_os_lite/preflight.sh
+M deploy/pi_os_lite/run_mavproxy.sh
+M deploy/pi_os_lite/run_tracker_pipeline.sh
+M deploy/pi_os_lite/shutdown_on_ch8.py
+```
+
+`git diff --stat` showed `0 insertions, 0 deletions`, and the files were executable on the Pi while the repo tracked them as `100644`. Root cause: install-time `chmod +x` created mode-only changes. Fix: the deploy entrypoints are now tracked as executable (`100755`) in git. After restoring the old local mode noise and pulling the new commit, the Pi repo was clean and the scripts remained executable.
+
+Post-reboot checks passed:
+
+```text
+systemctl is-enabled:
+  casy-mavproxy.service          enabled
+  casy-ros-bridges.service       enabled
+  casy-tracker-pipeline.service  enabled
+  casy-ch8-shutdown.service      enabled
+
+systemctl is-active:
+  all four services active
+
+deploy/pi_os_lite/preflight.sh:
+  rpicam-hello found
+  Picamera2 import ok
+  /dev/serial0 -> ttyS0
+  Docker access ok
+  ROS master port 192.168.1.154:11311 reachable
+```
+
+MAVProxy/FC verification through the TCP MAVLink output:
+
+```text
+heartbeat system=1 component=0 armed=False mode=ALT_HOLD
+voltage_battery: 24594 mV
+battery_remaining: 98
+drop_rate_comm: 0
+errors_comm: 0
+```
+
+MAVProxy logs also showed brief radio failsafe messages and an ARM/DISARM event during bench testing. Treat these as safety-relevant if they are not caused by deliberate transmitter actions. Props remained removed.
+
+ROS graph verification:
+
+```text
+/autonomy_enable
+/quad_commands
+/target_bearing
+```
+
+`/quad_commands` had `/ros_rc_bridge` subscribed. A safe all-zero `std_msgs/UInt16MultiArray` was published to `/quad_commands` from a temporary container-side `rospy` script. The RC bridge stayed running, and the FC remained disarmed afterward.
+
+`/target_bearing` was publishing at about 52 Hz. One stale `/target_bearing` publisher remained registered in the remote ROS master after an older container exited:
+
+```text
+/target_bearing_publisher_1_1779895707575 -> contact failed
+```
+
+Root cause: stale ROS master registration, not a second live tracker pipeline. `rosnode cleanup` removed it. After cleanup, `/target_bearing` had one live publisher.
+
+Remaining blockers from this validation pass:
+
+- OptiTrack topics were not present on the remote ROS master during the check, even though the master was reachable.
+- `/target_bearing` sampled `z: 0.0` during the automated check because no visible target was confirmed at that moment.
+- The active Simulink-generated package is still not identified. `test_position_control4` is the newest/largest-looking candidate, but that is not proof. Do not auto-start any generated node until the intended package is confirmed.
