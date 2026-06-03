@@ -2,9 +2,9 @@
 
 ## Goal
 
-Build a Raspberry Pi camera-based vision module for a drone. The module detects a simple colored target in live video, computes the target centroid in image coordinates, and converts that centroid into horizontal and vertical bearing angles relative to the camera optical axis when calibration is available.
+Build a Raspberry Pi camera-based vision module for a drone. The module detects a simple colored target in live video, computes the target centroid in image coordinates, and later converts that centroid into horizontal and vertical bearing angles relative to the camera optical axis.
 
-The current phase does not include distance estimation, 3D reconstruction, SLAM, neural-network detection, or ROS integration.
+The current phase does not include distance estimation, 3D reconstruction, SLAM, neural-network detection, ROS integration, or camera calibration code.
 
 ## Current Target
 
@@ -41,14 +41,11 @@ config/green_tracker.json
 - OpenCV
 - NumPy
 
-Default wide-FOV video configuration:
+Known working camera configuration:
 
 ```python
-main={"size": (1280, 720), "format": "RGB888"}
-raw={"size": (2304, 1296)}
+main={"size": (640, 480), "format": "RGB888"}
 ```
-
-Use smaller 16:9 main frames such as `640x360` with `raw=2304x1296` when Pi 4 processing cost matters more than detail. Test `1536x864` with `--framerate 120` when evaluating fast-moving targets.
 
 ## Final Deployment Target
 
@@ -97,16 +94,15 @@ Definitions:
 5. Find external contours.
 6. Reject contours below minimum area.
 7. Reject contours below minimum circularity.
-8. Score each remaining contour with the enabled scoring components.
-9. Select the highest-scoring candidate that passes `min_score`.
-10. Compute centroid from image moments.
-11. Smooth the centroid.
-12. Compute `dx` and `dy` from image center.
-13. Print one tracking line per frame.
+8. Select the largest remaining contour.
+9. Compute centroid from image moments.
+10. Smooth the centroid.
+11. Compute `dx` and `dy` from image center.
+12. Print one tracking line per frame.
 
 ## Candidate Scoring
 
-The tracker ranks every candidate that passes the area and circularity gates using:
+The original legacy method selects the largest contour that passes area and circularity thresholds. The scored method ranks every candidate that passes the area cleanup gate using:
 
 - color fill inside the candidate
 - circularity
@@ -114,7 +110,7 @@ The tracker ranks every candidate that passes the area and circularity gates usi
 - solidity
 - optional sphere-like shading score
 
-The scored method does not use a fixed radius or fixed object-size gate. Area is used as the cleanup threshold, as a relative score when enabled, and as a tie-breaker when candidates have equal scores.
+The scored method does not use a fixed radius or fixed object-size gate. Area is used only as the existing cleanup threshold and as a tie-breaker when candidates have equal scores.
 
 Scoring components can be enabled or disabled in `config/green_tracker.json` and the tuning UI. Disabled components are not included in the weighted score. Expensive components such as color-fill ROI scoring and shading analysis should be disabled when testing Pi performance.
 
@@ -128,6 +124,12 @@ Scoring components can be enabled or disabled in `config/green_tracker.json` and
 6. Hover over controls in the tuning window for help text.
 7. Press `s` to save the current settings to `config/green_tracker.json`.
 8. Run `python3 scripts/green_tracker.py`; it loads the saved config automatically.
+
+To compare old and new methods live, run:
+
+```bash
+python3 scripts/compare_trackers.py
+```
 
 ## Calibration Workflow
 

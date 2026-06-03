@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple
 
+import cv2
 import numpy as np
 
 
@@ -34,8 +35,6 @@ def create_hsv_mask(
     kernel_size: int = 5,
 ) -> np.ndarray:
     """Create a cleaned binary mask for pixels inside the HSV range."""
-    import cv2
-
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, hsv_range.lower_array, hsv_range.upper_array)
 

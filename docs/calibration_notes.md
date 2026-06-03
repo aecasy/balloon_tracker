@@ -1,6 +1,6 @@
 # Calibration Notes
 
-Calibration code is available. Calibrate each camera mode separately before trusting yaw/pitch.
+Calibration is intentionally a later project phase.
 
 Before calibration:
 
@@ -9,13 +9,13 @@ Before calibration:
 - Confirm the contour does not jump to background objects.
 - Decide whether focus, exposure, and white balance should be locked.
 
-Calibration workflow:
+Future calibration workflow:
 
 1. Capture chessboard or calibration target images.
 2. Estimate camera matrix and distortion coefficients with OpenCV.
 3. Save `fx`, `fy`, `cx`, `cy`, and distortion coefficients.
 4. Add tests for pixel-to-bearing conversion.
-5. Run the tracker with that calibration so target centroids produce yaw and pitch bearing angles.
+5. Convert target centroid to yaw and pitch bearing angles.
 
 Do not add ROS publishing until this math is verified.
 
@@ -28,16 +28,4 @@ Calibration command:
 
 ```bash
 python3 scripts/calibrate_camera.py --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8
-```
-
-Default wide-FOV mode:
-
-```bash
-python3 scripts/calibrate_camera.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296 --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8
-```
-
-High-speed `1536x864p120` test mode:
-
-```bash
-python3 scripts/calibrate_camera.py --width 1536 --height 864 --raw-width 1536 --raw-height 864 --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8 --output config/camera_calibration_1536x864_raw1536x864.json
 ```

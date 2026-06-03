@@ -98,7 +98,6 @@ class ControlPanel:
                 pixel_format=base_config.camera.pixel_format,
                 focus=FOCUS_MODES[focus_index],
                 lens_position=self.value("lens_x100") / 100.0,
-                framerate=base_config.camera.framerate,
             ),
             hsv=HsvRange(lower=lower, upper=upper),
             morphology=MorphologyConfig(
@@ -314,7 +313,6 @@ def main() -> int:
         height=args.height,
         raw_width=args.raw_width,
         raw_height=args.raw_height,
-        framerate=args.framerate,
         focus=args.focus,
         lens_position=args.lens_position,
     )
@@ -352,7 +350,7 @@ def main() -> int:
                     close_iterations=live_config.morphology.close_iterations,
                     kernel_size=live_config.morphology.kernel_size,
                 )
-                result = tracker.update(mask, image_size, frame=frame)
+                result = tracker.update(mask, image_size, frame=frame, method="scored")
 
                 display_frame = frame.copy()
                 draw_detection(display_frame, result)
@@ -390,7 +388,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--height", type=int, default=None, help="temporary camera height override")
     parser.add_argument("--raw-width", type=int, default=None, help="temporary raw sensor mode width override")
     parser.add_argument("--raw-height", type=int, default=None, help="temporary raw sensor mode height override")
-    parser.add_argument("--framerate", type=float, default=None, help="temporary camera framerate override")
     parser.add_argument("--focus", choices=FOCUS_MODES, default=None, help="temporary focus mode override")
     parser.add_argument("--lens-position", type=float, default=None, help="temporary manual lens position override")
     parser.add_argument("--max-area", type=int, default=50000, help="maximum value for the min-area slider")
@@ -463,7 +460,7 @@ def build_control_specs(max_area: int) -> List[ControlSpec]:
             "Detection quality",
             0,
             100,
-            "Minimum circularity gate before scoring. Raise it to reject blobs; lower it if the ball edge is noisy.",
+            "How round the contour must be. Raise it to reject blobs; lower it if the ball edge is noisy.",
         ),
         ControlSpec(
             "smoothing_pct",
@@ -725,7 +722,7 @@ def draw_tuning_status(frame: np.ndarray, config: AppConfig, result) -> None:
             f"open={config.morphology.open_iterations} "
             f"close={config.morphology.close_iterations}"
         ),
-        f"focus={config.camera.focus} lens={config.camera.lens_position:.2f} fps={format_metric(config.camera.framerate)}",
+        f"focus={config.camera.focus} lens={config.camera.lens_position:.2f}",
     ]
 
     y = 24

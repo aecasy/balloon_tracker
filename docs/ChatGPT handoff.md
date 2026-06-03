@@ -1,7 +1,5 @@
 # Codex Handoff Summary — CASY Drone Camera
 
-Historical note: this handoff captures an earlier phase. For current defaults, use `README.md` and `config/green_tracker.json`.
-
 ## Project goal
 
 Build a Raspberry Pi camera-based vision module for a drone. The module should detect a simple colored target in live video, compute the target centroid in image coordinates, and eventually convert that centroid into **horizontal and vertical bearing angles** relative to the camera optical axis. The system does **not** need distance/range estimation, 3D reconstruction, SLAM, or neural-network detection at this stage. The final output should be suitable for ROS / downstream control integration, for example yaw angle, pitch angle, detection flag, timestamp, and optional quality metrics. 
@@ -140,11 +138,10 @@ lower_green = np.array([68, 180, 20])
 upper_green = np.array([88, 255, 255])
 ```
 
-Current wide-FOV default:
+Current recommended resolution:
 
 ```python
-main={"size": (1280, 720), "format": "RGB888"}
-raw={"size": (2304, 1296)}
+main={"size": (640, 480), "format": "RGB888"}
 ```
 
 ---
@@ -265,7 +262,7 @@ detected=True dx=42 dy=-18 area=5320 circularity=0.81
 - Use Picamera2 instead of cv2.VideoCapture(0).
 - Use apt packages, not pip, for Picamera2 on Ubuntu 26.04.
 - Use HSV segmentation and contour tracking, not ML.
-- Default to `1280x720` processing over `2304x1296` raw for wide-FOV live tracking; test `1536x864p120` for fast targets when needed.
+- Work at 640x480 for speed and easier debugging.
 - Add target-lost behavior, smoothing, area filtering, and circularity filtering before calibration.
 - Calibrate only after centroid tracking is stable.
 ```

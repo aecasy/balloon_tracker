@@ -89,16 +89,15 @@ config/green_tracker.json
 
 Press `q` to quit.
 
-## Camera Field Of View
+Compare the old and new candidate selection methods live:
 
-The default tracker config uses a practical wide-FOV video mode:
-
-```text
-main 1280x720
-raw  2304x1296
+```bash
+python3 scripts/compare_trackers.py
 ```
 
-This asks Camera Module 3 for the wide `2304x1296` sensor mode while processing a smaller `1280x720` frame. It is a better default for live OpenCV tracking than the full still-image sensor size.
+In the comparison window, `legacy` is the old largest-valid-contour method and `scored` is the new weighted candidate scorer. The candidate table shows the top scored candidates and their component values.
+
+## Camera Field Of View
 
 The requested output size can affect the sensor mode Picamera2 chooses. A 4:3 output such as `640x480` may use a cropped view. To ask Camera Module 3 for a wide 16:9 sensor mode while still processing a smaller frame, pass a matching raw sensor size:
 
@@ -106,12 +105,12 @@ The requested output size can affect the sensor mode Picamera2 chooses. A 4:3 ou
 python3 scripts/cam_test.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296
 ```
 
-If the view looks wider with this command, keep the raw mode. In testing, this recovered a wider horizontal field of view than a cropped `640x480` setup.
+If the view looks wider with this command, keep the raw mode. In testing, this recovered a wider horizontal field of view than the default `640x480` setup.
 
 Processing cost depends mostly on the `main` output size, not just the raw sensor size. For example, `1280x720` processes about three times as many pixels as `640x480`, so HSV masking, morphology, contour finding, scoring, and debug drawing all get heavier. For maximum field of view with lower CPU cost, keep the wide raw mode and use a smaller 16:9 processed frame:
 
 ```bash
-python3 scripts/green_tracker.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --output json --headless
+python3 scripts/green_tracker.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --method scored --output json --headless
 ```
 
 Good speed/detail tradeoffs:
@@ -131,38 +130,12 @@ For best runtime efficiency:
 - avoid unnecessarily large morphology kernel/open/close values
 - if CPU is still tight, disable heavier scoring components first, especially `shading` and then `color_fill`
 
-## High-Speed Mode
-
-Camera Module 3 also has a `1536x864p120` mode. This may help with fast-moving targets because motion between frames is smaller, but only if the Pi can process frames quickly enough. Start by testing camera delivery and display:
-
-```bash
-python3 scripts/cam_test.py --width 1536 --height 864 --raw-width 1536 --raw-height 864 --framerate 120
-```
-
-Then test the tracker headless:
-
-```bash
-python3 scripts/green_tracker.py --width 1536 --height 864 --raw-width 1536 --raw-height 864 --framerate 120 --output json --headless
-```
-
-If CPU cannot keep up, keep the `1536x864` raw mode but process a smaller 16:9 main frame:
-
-```bash
-python3 scripts/green_tracker.py --width 768 --height 432 --raw-width 1536 --raw-height 864 --framerate 120 --output json --headless
-```
-
-Calibrate separately before trusting yaw/pitch in this mode:
-
-```bash
-python3 scripts/calibrate_camera.py --width 1536 --height 864 --raw-width 1536 --raw-height 864 --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8 --output config/camera_calibration_1536x864_raw1536x864.json
-```
-
 Use the same camera geometry for tuning, calibration, and final runtime. If you change `width`, `height`, `raw_width`, or `raw_height`, recalibrate before trusting `yaw_deg` and `pitch_deg`. Do not use a `1280x720` calibration file for a `640x360` tracker run, even though both are 16:9; the calibration values are in pixels and depend on the exact output mode.
 
 ```bash
 python3 scripts/tune_tracker.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296
 python3 scripts/calibrate_camera.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296 --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8
-python3 scripts/green_tracker.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296 --output json --headless
+python3 scripts/green_tracker.py --width 1280 --height 720 --raw-width 2304 --raw-height 1296 --method scored --output json --headless
 ```
 
 Recommended efficient wide-FOV workflow:
@@ -170,7 +143,7 @@ Recommended efficient wide-FOV workflow:
 ```bash
 python3 scripts/tune_tracker.py --width 640 --height 360 --raw-width 2304 --raw-height 1296
 python3 scripts/calibrate_camera.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --pattern-cols 6 --pattern-rows 8 --square-size-mm 35.8
-python3 scripts/green_tracker.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --output json --headless
+python3 scripts/green_tracker.py --width 640 --height 360 --raw-width 2304 --raw-height 1296 --method scored --output json --headless
 ```
 
 After changing to a wider view, the ball may occupy fewer pixels than before. Retune `min_area` if the tracker starts missing far-away targets. HSV usually stays similar, but area thresholds and scoring weights may need a small adjustment.
@@ -179,7 +152,7 @@ This can prevent accidental software cropping, but it cannot exceed the physical
 
 ## Candidate Scoring
 
-The tracker uses scored candidate selection. It keeps the HSV mask and contour pipeline, rejects contours below `min_area` or `min_circularity`, then ranks every remaining contour with a weighted score. This helps choose the object that looks most ball-like instead of blindly choosing the largest or first valid green blob.
+The legacy tracker chooses the largest contour that passes `min_area` and `min_circularity`. The scored tracker keeps the same HSV mask and contour pipeline, then ranks every valid contour with a weighted score. This helps choose the object that looks most ball-like instead of blindly choosing the largest or first valid green blob.
 
 Only enabled scoring components with positive weights participate in the final score:
 
@@ -297,18 +270,6 @@ In the calibration window:
 6. Press `k` to calibrate and save.
 7. Press `q` to quit.
 
-For headless calibration over SSH, stop any service that is using the camera, start the calibration stream on the Pi, then run the viewer on this computer:
-
-```bash
-python3 scripts/calibrate_camera.py --stream-port 5000
-```
-
-```powershell
-python scripts/remote_viewer.py --ip 192.168.1.126 --port 5000
-```
-
-The remote viewer forwards key presses back to the Pi, so use the same `c`, `k`, and `q` controls in the viewer window.
-
 By default calibration saves to:
 
 ```text
@@ -328,16 +289,16 @@ Green ball tracker:
 python3 scripts/green_tracker.py
 ```
 
-The tracker reads `config/green_tracker.json` by default and uses scored candidate selection.
+The tracker reads `config/green_tracker.json` by default. It still uses the legacy method unless you ask for the new scorer:
 
 ```bash
-python3 scripts/green_tracker.py --log-components
+python3 scripts/green_tracker.py --method scored --log-components
 ```
 
 Run the final headless bearing output as JSON:
 
 ```bash
-python3 scripts/green_tracker.py --output json --headless
+python3 scripts/green_tracker.py --method scored --output json --headless
 ```
 
 Run with a specific camera calibration:
@@ -348,24 +309,19 @@ python3 scripts/green_tracker.py \
   --height 360 \
   --raw-width 2304 \
   --raw-height 1296 \
+  --method scored \
   --output json \
   --headless \
   --calibration config/camera_calibration_left.json
 ```
 
-If you run before calibration, no flag is required:
+If you need to run before calibration, pass:
 
 ```bash
-python3 scripts/green_tracker.py --output json --headless
+python3 scripts/green_tracker.py --method scored --output json --headless --allow-uncalibrated
 ```
 
 Without calibration, `yaw_deg` and `pitch_deg` are `null`.
-
-To make a missing calibration file fail fast, pass:
-
-```bash
-python3 scripts/green_tracker.py --output json --headless --require-calibration
-```
 
 Use CLI flags only when you want a temporary override without changing the saved file.
 
@@ -396,13 +352,6 @@ Headless-style run without debug windows:
 python3 scripts/green_tracker.py --no-display
 ```
 
-Headless run with streamed debug windows:
-
-```bash
-python3 scripts/green_tracker.py --headless --stream-port 5000
-python scripts/remote_viewer.py --ip 192.168.1.126 --port 5000
-```
-
 Expected output:
 
 ```text
@@ -417,7 +366,7 @@ detected=False dx=None dy=None area=0 circularity=0.00
 
 ## Tests
 
-The current automated tests cover config loading, calibration file helpers, geometry, and OpenCV scoring behavior when OpenCV is installed:
+The current automated tests cover camera-independent geometry helpers:
 
 ```bash
 python -m unittest discover -s tests
@@ -443,7 +392,7 @@ scripts/
   calibrate_camera.py
   green_tracker.py
   hsv_probe.py
-  remote_viewer.py
+  compare_trackers.py
   tune_tracker.py
 src/
   vision_tracker/
@@ -453,7 +402,6 @@ src/
     color_detector.py
     config.py
     geometry.py
-    streamer.py
     tracker.py
 tests/
   test_calibration.py

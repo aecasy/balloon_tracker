@@ -6,27 +6,15 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-CAMERA_MODULE_3_FULL_WIDTH = 4608
-CAMERA_MODULE_3_FULL_HEIGHT = 2592
-CAMERA_MODULE_3_DEFAULT_WIDTH = 1280
-CAMERA_MODULE_3_DEFAULT_HEIGHT = 720
-CAMERA_MODULE_3_DEFAULT_RAW_WIDTH = 2304
-CAMERA_MODULE_3_DEFAULT_RAW_HEIGHT = 1296
-CAMERA_MODULE_3_FAST_WIDTH = 1536
-CAMERA_MODULE_3_FAST_HEIGHT = 864
-CAMERA_MODULE_3_FAST_FPS = 120.0
-
-
 @dataclass(frozen=True)
 class CameraConfig:
-    width: int = CAMERA_MODULE_3_DEFAULT_WIDTH
-    height: int = CAMERA_MODULE_3_DEFAULT_HEIGHT
-    raw_width: Optional[int] = CAMERA_MODULE_3_DEFAULT_RAW_WIDTH
-    raw_height: Optional[int] = CAMERA_MODULE_3_DEFAULT_RAW_HEIGHT
+    width: int = 640
+    height: int = 480
+    raw_width: Optional[int] = None
+    raw_height: Optional[int] = None
     pixel_format: str = "RGB888"
     focus: str = "continuous"
     lens_position: float = 2.0
-    framerate: Optional[float] = None
 
     def __post_init__(self) -> None:
         if self.width <= 0 or self.height <= 0:
@@ -39,8 +27,6 @@ class CameraConfig:
             raise ValueError("raw_height must be positive")
         if self.focus not in {"continuous", "manual", "none"}:
             raise ValueError("focus must be one of: continuous, manual, none")
-        if self.framerate is not None and self.framerate <= 0:
-            raise ValueError("framerate must be positive")
 
 
 class PiCamera:
@@ -66,9 +52,6 @@ class PiCamera:
         }
         if self.config.raw_width is not None and self.config.raw_height is not None:
             preview_options["raw"] = {"size": (self.config.raw_width, self.config.raw_height)}
-        if self.config.framerate is not None:
-            frame_duration_us = int(round(1_000_000 / self.config.framerate))
-            preview_options["controls"] = {"FrameDurationLimits": (frame_duration_us, frame_duration_us)}
 
         camera_config = self._picam2.create_preview_configuration(**preview_options)
         self._picam2.configure(camera_config)
