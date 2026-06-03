@@ -99,6 +99,15 @@ config/camera_calibration_1280x720_raw2304x1296.json
 
 Calibration is tied to the exact `width`, `height`, `raw_width`, and `raw_height`. A `1280x720` calibration must not be treated as interchangeable with `640x360` unless a calibration-scaling workflow is explicitly implemented and validated.
 
+Default wide-FOV video configuration:
+
+```python
+main={"size": (1280, 720), "format": "RGB888"}
+raw={"size": (2304, 1296)}
+```
+
+Use smaller 16:9 main frames such as `640x360` with `raw=2304x1296` when Pi 4 processing cost matters more than detail. Test `1536x864` with `--framerate 120` when evaluating fast-moving targets.
+
 ## Tracker Output
 
 The tracker reports target detection and quality data:
@@ -133,7 +142,7 @@ The exact ROS message path should stay aligned with `src/ros_nodes/target_bearin
 
 ## Candidate Scoring
 
-The legacy tracker selected the largest contour that passed area and circularity gates. The current scored method ranks every valid contour using weighted components:
+The current scored method ranks every candidate that passes the area and circularity gates using:
 
 - `color_fill`
 - `circularity`
@@ -151,7 +160,22 @@ final_score = sum(component_score * component_weight) / sum(active_component_wei
 
 If every component is disabled or every active weight is zero, scored detection returns no target.
 
+The scored method does not use a fixed radius or fixed object-size gate. Area is used as the cleanup threshold, as a relative score when enabled, and as a tie-breaker when candidates have equal scores.
+
+Scoring components can be enabled or disabled in `config/green_tracker.json` and the tuning UI. Disabled components are not included in the weighted score. Expensive components such as color-fill ROI scoring and shading analysis should be disabled when testing Pi performance.
+
 `shading` is off by default because it costs more CPU and depends on lighting.
+
+## Tuning Workflow
+
+1. Run `python3 scripts/tune_tracker.py`.
+2. Start with the `Target color` group and tune HSV until the ball is white in the mask.
+3. Use `Detection quality` to reject specks and unstable contours.
+4. Use `Mask cleanup` only if the mask is noisy or the target has holes.
+5. Use `Camera focus` only if the image is visibly soft.
+6. Hover over controls in the tuning window for help text.
+7. Press `s` to save the current settings to `config/green_tracker.json`.
+8. Run `python3 scripts/green_tracker.py`; it loads the saved config automatically.
 
 ## Calibration
 

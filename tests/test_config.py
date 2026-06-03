@@ -12,12 +12,22 @@ try:
 except ImportError:
     cv2 = None
 
+
 if cv2 is not None:
     from vision_tracker.config import app_config_from_dict
 
 
 @unittest.skipIf(cv2 is None, "OpenCV is not installed")
 class ConfigTests(unittest.TestCase):
+    def test_default_camera_uses_wide_camera_module_3_video_mode(self):
+        config = app_config_from_dict({})
+
+        self.assertEqual(config.camera.width, 1280)
+        self.assertEqual(config.camera.height, 720)
+        self.assertEqual(config.camera.raw_width, 2304)
+        self.assertEqual(config.camera.raw_height, 1296)
+        self.assertIsNone(config.camera.framerate)
+
     def test_old_scoring_config_loads_component_defaults(self):
         config = app_config_from_dict(
             {
@@ -75,6 +85,49 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.camera.height, 720)
         self.assertEqual(config.camera.raw_width, 2304)
         self.assertEqual(config.camera.raw_height, 1296)
+
+    def test_camera_size_override_does_not_imply_raw_mode(self):
+        config = app_config_from_dict(
+            {
+                "camera": {
+                    "width": 640,
+                    "height": 480,
+                }
+            }
+        )
+
+        self.assertEqual(config.camera.width, 640)
+        self.assertEqual(config.camera.height, 480)
+        self.assertIsNone(config.camera.raw_width)
+        self.assertIsNone(config.camera.raw_height)
+
+    def test_camera_framerate_loads_from_config(self):
+        config = app_config_from_dict(
+            {
+                "camera": {
+                    "framerate": 120,
+                }
+            }
+        )
+
+        self.assertEqual(config.camera.framerate, 120.0)
+
+    def test_camera_libcamera_controls_load_from_config(self):
+        config = app_config_from_dict(
+            {
+                "camera": {
+                    "awb_mode": "daylight",
+                    "exposure_time": 5000,
+                    "analogue_gain": 2.5,
+                    "min_framerate": 60,
+                }
+            }
+        )
+
+        self.assertEqual(config.camera.awb_mode, "daylight")
+        self.assertEqual(config.camera.exposure_time, 5000)
+        self.assertEqual(config.camera.analogue_gain, 2.5)
+        self.assertEqual(config.camera.min_framerate, 60.0)
 
 
 if __name__ == "__main__":

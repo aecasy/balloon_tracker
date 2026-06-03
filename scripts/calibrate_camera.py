@@ -17,7 +17,14 @@ import cv2
 import numpy as np
 
 from vision_tracker.calibration import CalibrationData, default_calibration_path, save_calibration
-from vision_tracker.camera import CameraConfig, PiCamera
+from vision_tracker.camera import (
+    CAMERA_MODULE_3_DEFAULT_HEIGHT,
+    CAMERA_MODULE_3_DEFAULT_RAW_HEIGHT,
+    CAMERA_MODULE_3_DEFAULT_RAW_WIDTH,
+    CAMERA_MODULE_3_DEFAULT_WIDTH,
+    CameraConfig,
+    PiCamera,
+)
 from vision_tracker.streamer import FrameServer
 
 
@@ -42,15 +49,14 @@ def main() -> int:
         exposure_time=args.exposure_time,
         analogue_gain=args.analogue_gain,
         min_framerate=args.min_framerate,
+        framerate=args.framerate,
     )
 
     print("Checkerboard calibration")
     print(f"pattern_cols={args.pattern_cols} pattern_rows={args.pattern_rows} square_size_mm={args.square_size_mm}")
     print("Press c to capture a detected board, k to calibrate/save, q to quit.")
 
-    streamer = None
-    if args.stream_port:
-        streamer = FrameServer(args.stream_port)
+    streamer = FrameServer(args.stream_port) if args.stream_port else None
 
     try:
         with PiCamera(camera_config) as camera:
@@ -84,7 +90,6 @@ def main() -> int:
                     2,
                     cv2.LINE_AA,
                 )
-                
                 if streamer:
                     streamer.send_frame("calibration", display_frame)
                     key = streamer.get_key()
@@ -132,16 +137,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pattern-rows", type=int, default=8, help="checkerboard inner corners across rows")
     parser.add_argument("--square-size-mm", type=float, default=35.8, help="checkerboard square size in millimeters")
     parser.add_argument("--min-samples", type=int, default=15, help="minimum captured views before saving calibration")
-    parser.add_argument("--width", type=int, default=640, help="camera image width")
-    parser.add_argument("--height", type=int, default=480, help="camera image height")
-    parser.add_argument("--raw-width", type=int, default=None, help="raw sensor mode width")
-    parser.add_argument("--raw-height", type=int, default=None, help="raw sensor mode height")
+    parser.add_argument("--width", type=int, default=CAMERA_MODULE_3_DEFAULT_WIDTH, help="camera image width")
+    parser.add_argument("--height", type=int, default=CAMERA_MODULE_3_DEFAULT_HEIGHT, help="camera image height")
+    parser.add_argument("--raw-width", type=int, default=CAMERA_MODULE_3_DEFAULT_RAW_WIDTH, help="raw sensor mode width")
+    parser.add_argument("--raw-height", type=int, default=CAMERA_MODULE_3_DEFAULT_RAW_HEIGHT, help="raw sensor mode height")
     parser.add_argument("--focus", choices=["continuous", "manual", "none"], default="continuous", help="camera focus mode")
     parser.add_argument("--lens-position", type=float, default=2.0, help="manual focus lens position")
     parser.add_argument("--awb-mode", type=str, default="auto", help="camera AWB mode")
     parser.add_argument("--exposure-time", type=int, default=0, help="camera exposure time in microseconds")
     parser.add_argument("--analogue-gain", type=float, default=0.0, help="camera analogue gain")
     parser.add_argument("--min-framerate", type=float, default=0.0, help="camera minimum framerate")
+    parser.add_argument("--framerate", type=float, default=None, help="exact camera framerate override")
     parser.add_argument("--stream-port", type=int, default=None, help="port to stream OpenCV frames over TCP")
     parser.add_argument(
         "--output",
