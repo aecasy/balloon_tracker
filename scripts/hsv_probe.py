@@ -14,7 +14,14 @@ if str(SRC_DIR) not in sys.path:
 
 import cv2
 
-from vision_tracker.camera import CameraConfig, PiCamera
+from vision_tracker.camera import (
+    CAMERA_MODULE_3_DEFAULT_HEIGHT,
+    CAMERA_MODULE_3_DEFAULT_RAW_HEIGHT,
+    CAMERA_MODULE_3_DEFAULT_RAW_WIDTH,
+    CAMERA_MODULE_3_DEFAULT_WIDTH,
+    CameraConfig,
+    PiCamera,
+)
 
 latest_frame = None
 
@@ -23,10 +30,11 @@ def main() -> int:
     global latest_frame
 
     parser = argparse.ArgumentParser(description="Sample HSV values by clicking on the camera image.")
-    parser.add_argument("--width", type=int, default=640)
-    parser.add_argument("--height", type=int, default=480)
-    parser.add_argument("--raw-width", type=int, default=None)
-    parser.add_argument("--raw-height", type=int, default=None)
+    parser.add_argument("--width", type=int, default=CAMERA_MODULE_3_DEFAULT_WIDTH)
+    parser.add_argument("--height", type=int, default=CAMERA_MODULE_3_DEFAULT_HEIGHT)
+    parser.add_argument("--raw-width", type=int, default=CAMERA_MODULE_3_DEFAULT_RAW_WIDTH)
+    parser.add_argument("--raw-height", type=int, default=CAMERA_MODULE_3_DEFAULT_RAW_HEIGHT)
+    parser.add_argument("--framerate", type=float, default=None)
     parser.add_argument("--focus", choices=["continuous", "manual", "none"], default="continuous")
     parser.add_argument("--lens-position", type=float, default=2.0)
     args = parser.parse_args()
@@ -36,6 +44,7 @@ def main() -> int:
         height=args.height,
         raw_width=args.raw_width,
         raw_height=args.raw_height,
+        framerate=args.framerate,
         focus=args.focus,
         lens_position=args.lens_position,
     )

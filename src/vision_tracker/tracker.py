@@ -81,7 +81,8 @@ class CandidateMetrics:
 class ScoredCandidate:
     centroid: PixelPoint
     area: float
-    circularity: Optional[float]
+    circularity: float
+    circularity_score: Optional[float]
     circle_fit: Optional[float]
     enclosing_fill: Optional[float]
     solidity: Optional[float]
@@ -94,7 +95,7 @@ class ScoredCandidate:
     def component_scores(self) -> Dict[str, Optional[float]]:
         return {
             "color_fill": self.color_fill,
-            "circularity": self.circularity,
+            "circularity": self.circularity_score,
             "circle_fit": self.circle_fit,
             "enclosing_fill": self.enclosing_fill,
             "solidity": self.solidity,
@@ -112,7 +113,7 @@ class DetectionResult:
     area: float
     circularity: float
     timestamp: float
-    method: str = "legacy"
+    method: str = "scored"
 
     def to_log_line(self, include_components: bool = False) -> str:
         if not self.detected:
@@ -156,7 +157,7 @@ class ScoredDetectionResult(DetectionResult):
 
 
 class TargetTracker:
-    """Tracks either the legacy largest contour or the best scored candidate."""
+    """Tracks the best scored contour candidate."""
 
     def __init__(self, config: TrackerConfig, scoring_config: Optional[ScoringConfig] = None) -> None:
         self.config = config
@@ -168,48 +169,8 @@ class TargetTracker:
         mask: np.ndarray,
         image_size: ImageSize,
         frame: Optional[np.ndarray] = None,
-        method: str = "legacy",
-    ) -> DetectionResult:
-        if method == "legacy":
-            return self.update_legacy(mask, image_size)
-        if method == "scored":
-            return self.update_scored(mask, image_size, frame)
-        raise ValueError("method must be one of: legacy, scored")
-
-    def update_legacy(self, mask: np.ndarray, image_size: ImageSize) -> DetectionResult:
-        candidate = find_best_contour(
-            mask,
-            min_area=self.config.min_area,
-            min_circularity=self.config.min_circularity,
-        )
-
-        if candidate is None:
-            self._smoothed_centroid = None
-            return DetectionResult(
-                detected=False,
-                centroid=None,
-                dx=None,
-                dy=None,
-                area=0.0,
-                circularity=0.0,
-                timestamp=time(),
-                method="legacy",
-            )
-
-        centroid, area, circularity = candidate
-        centroid = self._smooth(centroid)
-        dx, dy = pixel_offset(centroid, image_size)
-
-        return DetectionResult(
-            detected=True,
-            centroid=centroid,
-            dx=int(round(dx)),
-            dy=int(round(dy)),
-            area=area,
-            circularity=circularity,
-            timestamp=time(),
-            method="legacy",
-        )
+    ) -> ScoredDetectionResult:
+        return self.update_scored(mask, image_size, frame)
 
     def update_scored(
         self,
@@ -243,14 +204,14 @@ class TargetTracker:
             dx=int(round(dx)),
             dy=int(round(dy)),
             area=candidate.area,
-            circularity=candidate.circularity if candidate.circularity is not None else 0.0,
+            circularity=candidate.circularity,
             timestamp=time(),
             method="scored",
             score=candidate.score,
             enclosing_fill=candidate.enclosing_fill,
             solidity=candidate.solidity,
             color_fill=candidate.color_fill,
-            circularity_score=candidate.circularity,
+            circularity_score=candidate.circularity_score,
             circle_fit=candidate.circle_fit,
             relative_area=candidate.relative_area,
             shading_score=candidate.shading_score,
@@ -272,45 +233,6 @@ class TargetTracker:
         return smoothed
 
 
-def find_best_contour(
-    mask: np.ndarray,
-    min_area: float,
-    min_circularity: float,
-) -> Optional[Tuple[PixelPoint, float, float]]:
-    candidates = legacy_candidates(mask, min_area, min_circularity)
-    if not candidates:
-        return None
-
-    candidate = max(candidates, key=lambda item: item[1])
-    return candidate
-
-
-def legacy_candidates(
-    mask: np.ndarray,
-    min_area: float,
-    min_circularity: float,
-) -> List[Tuple[PixelPoint, float, float]]:
-    contours = find_external_contours(mask)
-    candidates: List[Tuple[PixelPoint, float, float]] = []
-
-    for contour in contours:
-        area = float(cv2.contourArea(contour))
-        if area < min_area:
-            continue
-
-        circularity = contour_circularity(contour)
-        if circularity < min_circularity:
-            continue
-
-        centroid = contour_centroid(contour)
-        if centroid is None:
-            continue
-
-        candidates.append((centroid, area, circularity))
-
-    return candidates
-
-
 def score_candidates(
     mask: np.ndarray,
     tracker_config: TrackerConfig,
@@ -320,23 +242,27 @@ def score_candidates(
     if active_weight_sum(scoring_config) <= 0.0:
         return []
 
-    raw_candidates: List[Tuple[np.ndarray, PixelPoint, float]] = []
+    raw_candidates: List[Tuple[np.ndarray, PixelPoint, float, float]] = []
 
     for contour in find_external_contours(mask):
         area = float(cv2.contourArea(contour))
         if area < tracker_config.min_area:
             continue
 
+        circularity = contour_circularity(contour)
+        if circularity < tracker_config.min_circularity:
+            continue
+
         centroid = contour_centroid(contour)
         if centroid is None:
             continue
 
-        raw_candidates.append((contour, centroid, area))
+        raw_candidates.append((contour, centroid, area, circularity))
 
-    largest_area = max((area for _, _, area in raw_candidates), default=0.0)
+    largest_area = max((area for _, _, area, _ in raw_candidates), default=0.0)
     candidates: List[ScoredCandidate] = []
 
-    for contour, centroid, area in raw_candidates:
+    for contour, centroid, area, circularity in raw_candidates:
         metrics = candidate_metrics(mask, contour, area, largest_area, scoring_config, frame)
         score = weighted_candidate_score(metrics, scoring_config)
 
@@ -344,7 +270,8 @@ def score_candidates(
             ScoredCandidate(
                 centroid=centroid,
                 area=area,
-                circularity=metrics.circularity,
+                circularity=circularity,
+                circularity_score=metrics.circularity,
                 circle_fit=metrics.circle_fit,
                 enclosing_fill=metrics.enclosing_fill,
                 solidity=metrics.solidity,

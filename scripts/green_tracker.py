@@ -20,6 +20,7 @@ from vision_tracker.calibration import default_calibration_path, load_calibratio
 from vision_tracker.color_detector import create_hsv_mask, parse_hsv_triplet
 from vision_tracker.config import default_config_path, load_app_config, with_overrides
 from vision_tracker.geometry import ImageSize, calibrated_pixel_to_bearing_degrees
+from vision_tracker.streamer import FrameServer
 from vision_tracker.tracker import TargetTracker
 
 
@@ -33,6 +34,7 @@ def main() -> int:
         height=args.height,
         raw_width=args.raw_width,
         raw_height=args.raw_height,
+        framerate=args.framerate,
         focus=args.focus,
         lens_position=args.lens_position,
         lower_hsv=args.lower_hsv,
@@ -53,20 +55,27 @@ def main() -> int:
         pixel_format=config.camera.pixel_format,
         focus=config.camera.focus,
         lens_position=config.camera.lens_position,
+        framerate=config.camera.framerate,
     )
     tracker = TargetTracker(config.tracker, config.scoring)
     image_size = ImageSize(width=config.camera.width, height=config.camera.height)
     calibration = load_calibration_optional(args.calibration.resolve())
+    if calibration is not None:
+        validate_calibration_matches_camera(calibration, image_size, args.calibration)
 
-    if calibration is None and not args.allow_uncalibrated:
+    if calibration is None and args.require_calibration:
         raise SystemExit(
             f"Calibration file not found: {args.calibration}. "
-            "Run scripts/calibrate_camera.py first or pass --allow-uncalibrated."
+            "Run scripts/calibrate_camera.py first or omit --require-calibration."
         )
 
     print(f"loaded_config={config_path}", file=sys.stderr, flush=True)
     if calibration is not None:
         print(f"loaded_calibration={args.calibration.resolve()}", file=sys.stderr, flush=True)
+    else:
+        print("loaded_calibration=None yaw_pitch_disabled=True", file=sys.stderr, flush=True)
+
+    streamer = FrameServer(args.stream_port) if args.stream_port else None
 
     try:
         with PiCamera(camera_config) as camera:
@@ -79,13 +88,22 @@ def main() -> int:
                     close_iterations=config.morphology.close_iterations,
                     kernel_size=config.morphology.kernel_size,
                 )
-                result = tracker.update(mask, image_size, frame=frame, method=args.method)
+                result = tracker.update(mask, image_size, frame=frame)
                 yaw_deg, pitch_deg = result_bearing(result, calibration)
                 print(format_result(result, yaw_deg, pitch_deg, args), flush=True)
 
-                if args.display:
+                if args.display or streamer:
                     display_frame = frame.copy()
                     draw_detection(display_frame, result, yaw_deg, pitch_deg)
+
+                if streamer:
+                    streamer.send_frame("camera", display_frame)
+                    streamer.send_frame("mask", mask)
+                    key = streamer.get_key()
+                    if key == ord("q"):
+                        break
+
+                if args.display:
                     cv2.imshow("camera", display_frame)
                     cv2.imshow("mask", mask)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -94,6 +112,8 @@ def main() -> int:
         pass
     finally:
         cv2.destroyAllWindows()
+        if streamer:
+            streamer.close()
 
     return 0
 
@@ -110,6 +130,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--height", type=int, default=None, help="temporary camera image height override")
     parser.add_argument("--raw-width", type=int, default=None, help="temporary raw sensor mode width override")
     parser.add_argument("--raw-height", type=int, default=None, help="temporary raw sensor mode height override")
+    parser.add_argument("--framerate", type=float, default=None, help="temporary camera framerate override")
     parser.add_argument("--lower-hsv", type=parse_hsv_triplet, default=None, help="temporary lower HSV override: H,S,V")
     parser.add_argument("--upper-hsv", type=parse_hsv_triplet, default=None, help="temporary upper HSV override: H,S,V")
     parser.add_argument("--min-area", type=float, default=None, help="temporary minimum contour area override")
@@ -120,7 +141,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--close-iterations", type=int, default=None, help="temporary morphological close override")
     parser.add_argument("--focus", choices=["continuous", "manual", "none"], default=None, help="temporary focus mode override")
     parser.add_argument("--lens-position", type=float, default=None, help="temporary manual focus lens position override")
-    parser.add_argument("--method", choices=["legacy", "scored"], default="legacy", help="candidate selection method")
     parser.add_argument("--log-components", action="store_true", help="include scored component values in output")
     parser.add_argument("--output", choices=["text", "json"], default="text", help="output format for each frame")
     parser.add_argument(
@@ -129,9 +149,10 @@ def parse_args() -> argparse.Namespace:
         default=default_calibration_path(PROJECT_ROOT),
         help="camera calibration JSON file",
     )
-    parser.add_argument("--allow-uncalibrated", action="store_true", help="run without yaw/pitch if calibration is missing")
+    parser.add_argument("--require-calibration", action="store_true", help="exit if the calibration file is missing")
     parser.add_argument("--headless", action="store_true", help="disable OpenCV display windows")
     parser.add_argument("--no-display", dest="display", action="store_false", help="disable OpenCV debug windows")
+    parser.add_argument("--stream-port", type=int, default=None, help="port to stream OpenCV frames over TCP")
     parser.set_defaults(display=True)
     args = parser.parse_args()
     if args.headless:
@@ -143,6 +164,16 @@ def result_bearing(result, calibration):
     if not result.detected or result.centroid is None or calibration is None:
         return None, None
     return calibrated_pixel_to_bearing_degrees(result.centroid, calibration)
+
+
+def validate_calibration_matches_camera(calibration, image_size: ImageSize, path: Path) -> None:
+    if calibration.image_width == image_size.width and calibration.image_height == image_size.height:
+        return
+
+    raise SystemExit(
+        f"Calibration image size {calibration.image_width}x{calibration.image_height} "
+        f"does not match active camera size {image_size.width}x{image_size.height}: {path}"
+    )
 
 
 def format_result(result, yaw_deg, pitch_deg, args) -> str:
@@ -163,9 +194,7 @@ def format_result(result, yaw_deg, pitch_deg, args) -> str:
             payload["centroid"] = {"x": result.centroid.x, "y": result.centroid.y}
         if hasattr(result, "score"):
             payload["score"] = result.score
-        if args.log_components and hasattr(result, "component_scores"):
-            payload["components"] = result.component_scores()
-        elif args.log_components and hasattr(result, "candidates") and result.detected:
+        if args.log_components:
             payload["components"] = {
                 "color_fill": result.color_fill,
                 "circularity": result.circularity_score,

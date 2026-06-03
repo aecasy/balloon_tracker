@@ -7,7 +7,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-from .camera import CameraConfig
+from .camera import (
+    CAMERA_MODULE_3_DEFAULT_HEIGHT,
+    CAMERA_MODULE_3_DEFAULT_RAW_HEIGHT,
+    CAMERA_MODULE_3_DEFAULT_RAW_WIDTH,
+    CAMERA_MODULE_3_DEFAULT_WIDTH,
+    CameraConfig,
+)
 from .color_detector import HsvRange
 from .tracker import ScoringConfig, TrackerConfig
 
@@ -67,16 +73,20 @@ def app_config_from_dict(data: Dict[str, Any]) -> AppConfig:
     morphology_data = data.get("morphology", {})
     tracker_data = data.get("tracker", {})
     scoring_data = data.get("scoring", {})
+    camera_geometry_overridden = "width" in camera_data or "height" in camera_data
+    default_raw_width = None if camera_geometry_overridden else CAMERA_MODULE_3_DEFAULT_RAW_WIDTH
+    default_raw_height = None if camera_geometry_overridden else CAMERA_MODULE_3_DEFAULT_RAW_HEIGHT
 
     return AppConfig(
         camera=CameraConfig(
-            width=int(camera_data.get("width", 640)),
-            height=int(camera_data.get("height", 480)),
-            raw_width=_optional_int(camera_data.get("raw_width")),
-            raw_height=_optional_int(camera_data.get("raw_height")),
+            width=int(camera_data.get("width", CAMERA_MODULE_3_DEFAULT_WIDTH)),
+            height=int(camera_data.get("height", CAMERA_MODULE_3_DEFAULT_HEIGHT)),
+            raw_width=_optional_int(camera_data.get("raw_width", default_raw_width)),
+            raw_height=_optional_int(camera_data.get("raw_height", default_raw_height)),
             pixel_format=str(camera_data.get("pixel_format", "RGB888")),
             focus=str(camera_data.get("focus", "continuous")),
             lens_position=float(camera_data.get("lens_position", 2.0)),
+            framerate=_optional_float(camera_data.get("framerate")),
         ),
         hsv=HsvRange(
             lower=_hsv_tuple(hsv_data.get("lower", (68, 180, 20))),
@@ -122,6 +132,7 @@ def with_overrides(config: AppConfig, **overrides: Any) -> AppConfig:
         pixel_format=config.camera.pixel_format,
         focus=_value_or(config.camera.focus, overrides.get("focus")),
         lens_position=_value_or(config.camera.lens_position, overrides.get("lens_position")),
+        framerate=_value_or(config.camera.framerate, overrides.get("framerate")),
     )
     hsv = HsvRange(
         lower=_value_or(config.hsv.lower, overrides.get("lower_hsv")),
@@ -174,3 +185,9 @@ def _optional_int(value: Any) -> int | None:
     if value is None:
         return None
     return int(value)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    return float(value)
