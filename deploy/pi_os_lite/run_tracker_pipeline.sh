@@ -23,7 +23,6 @@ python3 scripts/green_tracker.py \
   --height "${TRACKER_HEIGHT:-720}" \
   --raw-width "${TRACKER_RAW_WIDTH:-2304}" \
   --raw-height "${TRACKER_RAW_HEIGHT:-1296}" \
-  --method "${TRACKER_METHOD:-scored}" \
   --output json \
   --headless \
   --calibration "${TRACKER_CALIBRATION:-config/camera_calibration_1280x720_raw2304x1296.json}" \

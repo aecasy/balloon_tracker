@@ -159,6 +159,14 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("docker run --rm -it --network host", text)
         self.assertIn("--env-file \"$ENV_FILE\"", text)
 
+    def test_tracker_pipeline_does_not_pass_removed_method_argument(self):
+        text = (DEPLOY_DIR / "run_tracker_pipeline.sh").read_text(encoding="utf-8")
+
+        self.assertIn("python3 scripts/green_tracker.py", text)
+        self.assertIn("--output json", text)
+        self.assertNotIn("--method", text)
+        self.assertNotIn("TRACKER_METHOD", text)
+
     def test_rc_bridge_maps_simulink_quad_commands_to_mavlink_override_channels(self):
         bridge = load_ros_node("ros_rc_bridge")
 
