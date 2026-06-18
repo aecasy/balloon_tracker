@@ -31,6 +31,8 @@ services:
       RC_OVERRIDE_TOPIC: ${RC_OVERRIDE_TOPIC:-quad_commands}
       AUTONOMY_ENABLE_TOPIC: ${AUTONOMY_ENABLE_TOPIC:-autonomy_enable}
       RC_CH7_HIGH_THRESH: ${RC_CH7_HIGH_THRESH:-1800}
+      LATENCY_DIAGNOSTICS: ${LATENCY_DIAGNOSTICS:-0}
+      TARGET_LATENCY_TOPIC: ${TARGET_LATENCY_TOPIC:-/target_latency}
       PYTHONUNBUFFERED: "1"
     command: python3 /app/src/ros_nodes/target_bearing_node.py
     stdin_open: true

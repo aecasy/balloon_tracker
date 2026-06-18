@@ -35,6 +35,8 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("TRACKER_HEIGHT=720", text)
         self.assertIn("TRACKER_RAW_WIDTH=2304", text)
         self.assertIn("TRACKER_RAW_HEIGHT=1296", text)
+        self.assertIn("LATENCY_DIAGNOSTICS=0", text)
+        self.assertIn("TARGET_LATENCY_TOPIC=/target_latency", text)
 
     def test_mavproxy_service_starts_native_uart_bridge_and_stops_quickly(self):
         text = (DEPLOY_DIR / "systemd" / "casy-mavproxy.service").read_text(encoding="utf-8")
@@ -67,6 +69,8 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("rc-ch7:", text)
         self.assertIn("MAVLINK_RC_OVERRIDE_ENDPOINT: ${MAVLINK_RC_OVERRIDE_ENDPOINT:-udp:127.0.0.1:14552}", text)
         self.assertIn("MAVLINK_RC_CH7_ENDPOINT: ${MAVLINK_RC_CH7_ENDPOINT:-udp:127.0.0.1:14551}", text)
+        self.assertIn("LATENCY_DIAGNOSTICS: ${LATENCY_DIAGNOSTICS:-0}", text)
+        self.assertIn("TARGET_LATENCY_TOPIC: ${TARGET_LATENCY_TOPIC:-/target_latency}", text)
         self.assertIn("profiles: [\"bench\"]", text)
 
     def test_simulink_ros_device_compose_service_is_isolated_and_profile_gated(self):

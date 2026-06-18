@@ -510,11 +510,66 @@ Provide /home/user/catkin_ws as a container-side symlink to the same workspace,
 because Simulink may probe that path even when the SSH username is ubuntu.
 ```
 
+Follow-up Simulink GUI test result:
+
+```text
+Device address: 192.168.1.126:2222
+Username: ubuntu
+ROS folder: /opt/ros/noetic
+Catkin workspace: /home/ubuntu/catkin_ws
+
+Ping succeeded.
+SSH connection to port 2222 succeeded.
+Sudo privilege check succeeded.
+ROS Noetic was detected in /opt/ros/noetic.
+/home/ubuntu/catkin_ws existed, was writable, and contained a valid Catkin workspace.
+```
+
 Pending manual test:
 
 ```text
-Rebuild and restart the Simulink ROS-device container after the workspace alias change.
-Use the Simulink GUI Test button again with Device address 192.168.1.126:2222.
-If the workspace check still points at /home/user/catkin_ws, click Fix only after
-confirming the path resolves to the mounted workspace.
+Deploy a tiny non-flight Simulink ROS model and verify Monitor & Tune.
+```
+
+## Latency Diagnostics
+
+Initial implementation date: 2026-06-18.
+
+Goal:
+
+```text
+Measure whether the native tracker -> Docker ROS publisher path adds meaningful delay.
+```
+
+Built-in diagnostic scope:
+
+```text
+tracker_to_docker_ms   native tracker JSON timestamp -> Docker node receives stdin line
+docker_to_publish_ms   Docker node receives stdin line -> /target_bearing publish timestamp
+tracker_to_publish_ms  native tracker JSON timestamp -> /target_bearing publish timestamp
+```
+
+Enable in `/etc/casy-drone/pi_os_lite.env`:
+
+```text
+LATENCY_DIAGNOSTICS=1
+TARGET_LATENCY_TOPIC=/target_latency
+```
+
+Then restart:
+
+```bash
+sudo systemctl restart casy-tracker-pipeline.service
+```
+
+Monitor:
+
+```bash
+./scripts/ros_exec.sh python3 /app/src/ros_nodes/latency_monitor.py
+```
+
+Later full-chain target to remember:
+
+```text
+camera capture -> tracker result -> Docker stdin receive -> ROS publish -> Simulink receive -> quad_commands publish -> RC bridge receive
 ```

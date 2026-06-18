@@ -141,6 +141,26 @@ For ROS integration, `target_bearing_node.py` publishes calibrated bearing data 
 
 The exact ROS message path should stay aligned with `src/ros_nodes/target_bearing_node.py` and the README.
 
+When `LATENCY_DIAGNOSTICS=1`, the target-bearing Docker node also publishes JSON timing diagnostics to:
+
+```text
+/target_latency
+```
+
+The current diagnostic scope is intentionally narrow:
+
+```text
+tracker_to_docker_ms   native tracker JSON timestamp -> Docker node receives stdin line
+docker_to_publish_ms   Docker node receives stdin line -> /target_bearing publish timestamp
+tracker_to_publish_ms  native tracker JSON timestamp -> /target_bearing publish timestamp
+```
+
+This is meant to isolate the pipe, Docker container, JSON parse, and ROS publish overhead. A later end-to-end latency feature should extend the chain to:
+
+```text
+camera capture -> tracker result -> Docker stdin receive -> ROS publish -> Simulink receive -> quad_commands publish -> RC bridge receive
+```
+
 ## Candidate Scoring
 
 The current scored method ranks every candidate that passes the area and circularity gates using:

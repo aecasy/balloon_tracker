@@ -1,14 +1,34 @@
 #!/usr/bin/env python3
-import sys
 import json
+import os
+import sys
 import rospy
 from geometry_msgs.msg import PointStamped
+from std_msgs.msg import String
+
+try:
+    from ros_nodes.latency_diagnostics import (
+        build_latency_payload,
+        format_latency_payload,
+        is_enabled,
+    )
+except ImportError:
+    from latency_diagnostics import (
+        build_latency_payload,
+        format_latency_payload,
+        is_enabled,
+    )
 
 def main():
     rospy.init_node('target_bearing_publisher', anonymous=True)
     pub = rospy.Publisher('/target_bearing', PointStamped, queue_size=10)
-    rate = rospy.Rate(30) # 30hz, but we publish as fast as stdin provides
-    
+    latency_pub = None
+    if is_enabled(os.getenv("LATENCY_DIAGNOSTICS")):
+        latency_topic = os.getenv("TARGET_LATENCY_TOPIC", "/target_latency")
+        latency_pub = rospy.Publisher(latency_topic, String, queue_size=10)
+        rospy.loginfo("Latency diagnostics enabled on %s", latency_topic)
+
+    sequence = 0
     rospy.loginfo("Target Bearing Node started. Waiting for JSON input on stdin...")
 
     for line in sys.stdin:
@@ -20,11 +40,13 @@ def main():
             continue
             
         try:
+            docker_receive_time = rospy.Time.now().to_sec()
             data = json.loads(line)
             
             # Create the message
             msg = PointStamped()
-            msg.header.stamp = rospy.Time.now()
+            publish_time = rospy.Time.now()
+            msg.header.stamp = publish_time
             msg.header.frame_id = "camera_optical_frame"
             
             detected = data.get("detected", False)
@@ -43,6 +65,16 @@ def main():
                 msg.point.z = 0.0
                 
             pub.publish(msg)
+
+            if latency_pub is not None:
+                payload = build_latency_payload(
+                    data,
+                    sequence=sequence,
+                    docker_receive_time=docker_receive_time,
+                    ros_publish_time=publish_time.to_sec(),
+                )
+                latency_pub.publish(String(data=format_latency_payload(payload)))
+            sequence += 1
             
         except json.JSONDecodeError:
             rospy.logwarn(f"Failed to parse JSON: {line}")

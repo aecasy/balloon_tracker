@@ -577,6 +577,47 @@ chmod +x scripts/ros_exec.sh
 ./scripts/ros_exec.sh rostopic hz /target_bearing
 ```
 
+### 7. Measure Tracker-to-Docker Latency
+
+The target-bearing Docker node can publish a diagnostic JSON message on `/target_latency`. This is off by default. Enable it in `/etc/casy-drone/pi_os_lite.env`:
+
+```text
+LATENCY_DIAGNOSTICS=1
+TARGET_LATENCY_TOPIC=/target_latency
+```
+
+Then restart the tracker pipeline so the container picks up the env file:
+
+```bash
+sudo systemctl restart casy-tracker-pipeline.service
+```
+
+Watch rolling latency summaries from a second terminal:
+
+```bash
+./scripts/ros_exec.sh python3 /app/src/ros_nodes/latency_monitor.py
+```
+
+Or inspect the raw diagnostic topic:
+
+```bash
+./scripts/ros_exec.sh rostopic echo /target_latency
+```
+
+The first built-in diagnostic measures:
+
+```text
+tracker_to_docker_ms   native tracker JSON timestamp -> Docker node receives stdin line
+docker_to_publish_ms   Docker node receives stdin line -> /target_bearing publish timestamp
+tracker_to_publish_ms  native tracker JSON timestamp -> /target_bearing publish timestamp
+```
+
+This isolates the pipe/Docker/ROS-publish part of the system. It does not yet measure full camera-to-flight latency. The later full-chain target is:
+
+```text
+camera capture -> tracker result -> Docker stdin receive -> ROS publish -> Simulink receive -> quad_commands publish -> RC bridge receive
+```
+
 ## Simulink GUI ROS Device Container
 
 The old Ubuntu 20.04 image let Simulink deploy a generated ROS package over SSH, start it, and monitor it from the Simulink model. The Pi OS Lite setup keeps the camera and MAVLink host services native, but adds a separate optional Docker target for this Simulink GUI workflow.
@@ -741,6 +782,8 @@ scripts/
   tune_tracker.py
 src/
   ros_nodes/
+    latency_diagnostics.py
+    latency_monitor.py
     ros_rc_bridge.py
     ros_rc_ch7_read.py
     target_bearing_node.py
@@ -757,6 +800,7 @@ tests/
   test_calibration.py
   test_config.py
   test_geometry.py
+  test_latency_diagnostics.py
   test_pi_os_lite_migration.py
   test_scoring.py
 requirements-notes.md
