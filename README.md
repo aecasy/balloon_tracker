@@ -610,16 +610,16 @@ From Windows PowerShell, verify SSH and ROS:
 ssh -p 2222 ubuntu@192.168.1.126 "source /opt/ros/noetic/setup.bash && rosversion -d"
 ```
 
-Use these Simulink hardware settings for the first GUI test:
+Use these Simulink hardware settings:
 
 ```text
 Device address: 192.168.1.126:2222
 Username: ubuntu
 ROS folder: /opt/ros/noetic
-Catkin workspace: ~/catkin_ws
+Catkin workspace: /home/ubuntu/catkin_ws
 ```
 
-The first experiment is specifically whether the Simulink GUI accepts `host:port` in the device address. If the GUI `Test` button rejects `192.168.1.126:2222`, stop here and decide on a new approach before adding SSH aliases, host SSH forwarding, native ROS installs, or other fallback plumbing.
+The Simulink GUI has been verified to accept `host:port` in the device address and connect over SSH port `2222`. If Simulink probes `/home/user/catkin_ws` anyway, that path is supported as a compatibility alias to `/home/ubuntu/catkin_ws`.
 
 If the GUI test succeeds, deploy a tiny non-flight ROS model first and verify Monitor & Tune before using the real guidance model. Before testing any generated node that can publish `quad_commands`, stop MAVLink command delivery:
 

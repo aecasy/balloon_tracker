@@ -101,7 +101,8 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("ros-noetic-geometry-msgs", text)
         self.assertIn("ros-noetic-std-msgs", text)
         self.assertIn("useradd -m -s /bin/bash ubuntu", text)
-        self.assertIn("mkdir -p /home/ubuntu/catkin_ws/src /run/sshd", text)
+        self.assertIn("mkdir -p /home/ubuntu/catkin_ws/src /home/user /run/sshd", text)
+        self.assertIn("ln -s /home/ubuntu/catkin_ws /home/user/catkin_ws", text)
         self.assertIn("COPY docker/simulink_ros_device/entrypoint.sh", text)
         self.assertIn("EXPOSE 2222", text)
 
@@ -115,6 +116,7 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("Port ${SSH_PORT}", text)
         self.assertIn("PasswordAuthentication yes", text)
         self.assertIn("AllowUsers ubuntu", text)
+        self.assertIn("ln -s \"$WORKSPACE\" /home/user/catkin_ws", text)
         self.assertIn("exec /usr/sbin/sshd -D -e", text)
 
     def test_simulink_ros_device_helper_uses_local_secret_file_and_profile(self):

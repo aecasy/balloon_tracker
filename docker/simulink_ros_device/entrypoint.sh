@@ -22,8 +22,15 @@ fi
 printf 'ubuntu:%s\n' "$PASSWORD" | chpasswd
 unset PASSWORD SIMULINK_ROS_DEVICE_PASSWORD
 
-mkdir -p "$WORKSPACE/src" /run/sshd /etc/ssh/sshd_config.d
+mkdir -p "$WORKSPACE/src" /home/user /run/sshd /etc/ssh/sshd_config.d
 chown -R ubuntu:ubuntu "$WORKSPACE"
+chown ubuntu:ubuntu /home/user
+
+if [ ! -e /home/user/catkin_ws ] || [ -L /home/user/catkin_ws ]; then
+    rm -f /home/user/catkin_ws
+    ln -s "$WORKSPACE" /home/user/catkin_ws
+    chown -h ubuntu:ubuntu /home/user/catkin_ws
+fi
 
 cat > /etc/ssh/sshd_config.d/simulink_ros_device.conf <<EOF
 Port ${SSH_PORT}

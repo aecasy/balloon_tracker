@@ -429,6 +429,7 @@ container sshd listens on port 2222.
 container user is ubuntu.
 ROS folder is /opt/ros/noetic.
 catkin workspace is /home/ubuntu/catkin_ws.
+/home/user/catkin_ws is a compatibility alias for Simulink probes.
 default host workspace mount is /home/casy/simulink_catkin_ws.
 password source is /etc/casy-drone/simulink_ros_device_password.
 ```
@@ -459,15 +460,15 @@ Simulink GUI settings to test:
 Device address: 192.168.1.126:2222
 Username: ubuntu
 ROS folder: /opt/ros/noetic
-Catkin workspace: ~/catkin_ws
+Catkin workspace: /home/ubuntu/catkin_ws
 ```
 
 Important experiment boundary:
 
 ```text
-If the Simulink GUI Test button cannot connect to 192.168.1.126:2222,
-stop and choose a new approach before adding SSH aliases, host forwarding,
-native ROS installs, or other fallback plumbing.
+The Simulink GUI Test button successfully connected to 192.168.1.126:2222.
+Do not add SSH aliases, host forwarding, native ROS installs, or other
+fallback plumbing for the port unless a later deployment step proves it is needed.
 ```
 
 Safety boundary for guidance-node tests:
@@ -491,10 +492,29 @@ The temporary container and temporary password/workspace files were removed afte
 Port 2222 was closed after cleanup.
 ```
 
+Simulink GUI test result:
+
+```text
+Pinging 192.168.1.126 succeeded.
+SSH connection to 192.168.1.126 port 2222 as ubuntu succeeded.
+Simulink detected sudo privileges, with sudo requiring a password.
+Simulink found ROS Noetic in /opt/ros/noetic.
+Simulink then checked /home/user/catkin_ws and reported the folder missing.
+```
+
+Fix:
+
+```text
+Keep /home/ubuntu/catkin_ws as the canonical mounted workspace.
+Provide /home/user/catkin_ws as a container-side symlink to the same workspace,
+because Simulink may probe that path even when the SSH username is ubuntu.
+```
+
 Pending manual test:
 
 ```text
-Create the real local password file with deploy/pi_os_lite/simulink_ros_device.sh init-password.
-Start the container with deploy/pi_os_lite/simulink_ros_device.sh start.
-Use the Simulink GUI Test button with Device address 192.168.1.126:2222.
+Rebuild and restart the Simulink ROS-device container after the workspace alias change.
+Use the Simulink GUI Test button again with Device address 192.168.1.126:2222.
+If the workspace check still points at /home/user/catkin_ws, click Fix only after
+confirming the path resolves to the mounted workspace.
 ```

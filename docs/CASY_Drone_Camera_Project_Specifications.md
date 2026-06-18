@@ -279,11 +279,12 @@ startup profile: docker compose --profile simulink
 SSH target: ubuntu@<pi-ip> port 2222
 ROS folder: /opt/ros/noetic
 catkin workspace: /home/ubuntu/catkin_ws
+Simulink compatibility workspace alias: /home/user/catkin_ws
 host workspace mount: /home/casy/simulink_catkin_ws by default
 password source: /etc/casy-drone/simulink_ros_device_password by default
 ```
 
-This container is not auto-started on boot. It exists to test whether the Simulink GUI can connect to `Device address: <pi-ip>:2222` while preserving the old deploy, run, and Monitor & Tune workflow. If the GUI cannot connect to `host:port`, stop and choose a new integration path before adding fallback SSH plumbing.
+This container is not auto-started on boot. It preserves the old Simulink deploy, run, and Monitor & Tune workflow over `Device address: <pi-ip>:2222`. The Simulink GUI has connected successfully to `192.168.1.126:2222`; deployment validation is now focused on workspace initialization and generated model behavior.
 
 ## Safety And Validation Rules
 
