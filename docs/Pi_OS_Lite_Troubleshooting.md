@@ -573,3 +573,56 @@ Later full-chain target to remember:
 ```text
 camera capture -> tracker result -> Docker stdin receive -> ROS publish -> Simulink receive -> quad_commands publish -> RC bridge receive
 ```
+
+## Missing `/target_bearing` After ROS Master Recovery
+
+Latest test date: 2026-06-18.
+
+Symptom:
+
+```text
+rostopic list showed only:
+/rosout
+/rosout_agg
+```
+
+First root cause:
+
+```text
+The configured ROS master was unreachable:
+ROS_MASTER_URI=http://192.168.1.154:11311
+Pi TCP check to 192.168.1.154:11311 failed.
+Ping to 192.168.1.154 also failed.
+```
+
+After the ROS master became reachable, a second root cause appeared:
+
+```text
+casy-tracker-pipeline.service was restart-looping.
+green_tracker.py exited with:
+error: unrecognized arguments: --method scored
+```
+
+The tracker is now always scored internally, and `scripts/green_tracker.py` no longer accepts `--method`. The stale deploy wrapper argument came from:
+
+```text
+deploy/pi_os_lite/run_tracker_pipeline.sh
+```
+
+Fix:
+
+```text
+Removed the obsolete --method "${TRACKER_METHOD:-scored}" argument.
+Removed TRACKER_METHOD from the committed env template.
+Added a regression test so the deploy wrapper cannot pass --method again.
+```
+
+Verification after pulling commit `043f971` on the Pi and restarting `casy-tracker-pipeline.service`:
+
+```text
+casy-tracker-pipeline.service active (running)
+green_tracker.py command line no longer contains --method
+/target_bearing appears in rostopic list
+rostopic info /target_bearing shows one publisher
+rostopic echo -n 1 /target_bearing returns a geometry_msgs/PointStamped sample
+```
