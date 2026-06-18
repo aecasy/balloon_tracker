@@ -69,6 +69,19 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("MAVLINK_RC_CH7_ENDPOINT: ${MAVLINK_RC_CH7_ENDPOINT:-udp:127.0.0.1:14551}", text)
         self.assertIn("profiles: [\"bench\"]", text)
 
+    def test_simulink_ros_device_compose_service_is_isolated_and_profile_gated(self):
+        text = (PROJECT_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+        self.assertIn("simulink-ros-device:", text)
+        self.assertIn("dockerfile: Dockerfile.simulink-ros-device", text)
+        self.assertIn("image: ${SIMULINK_ROS_DEVICE_IMAGE:-casy-simulink-ros-device}", text)
+        self.assertIn('network_mode: "host"', text)
+        self.assertIn("SIMULINK_ROS_DEVICE_SSH_PORT: ${SIMULINK_ROS_DEVICE_SSH_PORT:-2222}", text)
+        self.assertIn("SIMULINK_ROS_DEVICE_PASSWORD_FILE: /run/secrets/simulink_ros_device_password", text)
+        self.assertIn("${SIMULINK_CATKIN_HOST_DIR:-/home/casy/simulink_catkin_ws}:/home/ubuntu/catkin_ws", text)
+        self.assertIn("${SIMULINK_ROS_DEVICE_PASSWORD_FILE:-/etc/casy-drone/simulink_ros_device_password}:/run/secrets/simulink_ros_device_password:ro", text)
+        self.assertIn('profiles: ["simulink"]', text)
+
     def test_dockerfile_uses_apt_lxml_and_no_deps_pymavlink_install(self):
         text = (PROJECT_ROOT / "Dockerfile.ros").read_text(encoding="utf-8")
 
@@ -76,6 +89,54 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("python3-future", text)
         self.assertIn("python3-serial", text)
         self.assertIn("pip3 install --no-cache-dir --no-deps pymavlink==2.4.49", text)
+
+    def test_simulink_ros_device_dockerfile_matches_simulink_remote_target(self):
+        text = (PROJECT_ROOT / "Dockerfile.simulink-ros-device").read_text(encoding="utf-8")
+
+        self.assertIn("FROM ros:noetic-ros-base-focal", text)
+        self.assertIn("ENV SIMULINK_ROS_DEVICE_SSH_PORT=2222", text)
+        self.assertIn("ENV SIMULINK_CATKIN_WORKSPACE=/home/ubuntu/catkin_ws", text)
+        self.assertIn("openssh-server", text)
+        self.assertIn("python3-catkin-tools", text)
+        self.assertIn("ros-noetic-geometry-msgs", text)
+        self.assertIn("ros-noetic-std-msgs", text)
+        self.assertIn("useradd -m -s /bin/bash ubuntu", text)
+        self.assertIn("mkdir -p /home/ubuntu/catkin_ws/src /run/sshd", text)
+        self.assertIn("COPY docker/simulink_ros_device/entrypoint.sh", text)
+        self.assertIn("EXPOSE 2222", text)
+
+    def test_simulink_ros_device_entrypoint_requires_runtime_password(self):
+        text = (PROJECT_ROOT / "docker" / "simulink_ros_device" / "entrypoint.sh").read_text(encoding="utf-8")
+
+        self.assertIn('SSH_PORT="${SIMULINK_ROS_DEVICE_SSH_PORT:-2222}"', text)
+        self.assertIn('PASSWORD_FILE="${SIMULINK_ROS_DEVICE_PASSWORD_FILE:-}"', text)
+        self.assertIn("SIMULINK_ROS_DEVICE_PASSWORD or SIMULINK_ROS_DEVICE_PASSWORD_FILE is required", text)
+        self.assertIn("printf 'ubuntu:%s\\n' \"$PASSWORD\" | chpasswd", text)
+        self.assertIn("Port ${SSH_PORT}", text)
+        self.assertIn("PasswordAuthentication yes", text)
+        self.assertIn("AllowUsers ubuntu", text)
+        self.assertIn("exec /usr/sbin/sshd -D -e", text)
+
+    def test_simulink_ros_device_helper_uses_local_secret_file_and_profile(self):
+        text = (DEPLOY_DIR / "simulink_ros_device.sh").read_text(encoding="utf-8")
+
+        self.assertIn('SERVICE="simulink-ros-device"', text)
+        self.assertIn('PASSWORD_FILE="${SIMULINK_ROS_DEVICE_PASSWORD_FILE:-/etc/casy-drone/simulink_ros_device_password}"', text)
+        self.assertIn("init-password", text)
+        self.assertIn('docker compose --env-file "$ENV_FILE" --profile simulink "$@"', text)
+        self.assertIn('compose build "$SERVICE"', text)
+        self.assertIn('compose up -d "$SERVICE"', text)
+        self.assertIn('source /opt/ros/noetic/setup.bash && rosversion -d', text)
+        self.assertNotIn("SIMULINK_ROS_DEVICE_PASSWORD=", text)
+
+    def test_env_template_includes_simulink_ros_device_defaults_without_secret(self):
+        text = (DEPLOY_DIR / "pi_os_lite.env.example").read_text(encoding="utf-8")
+
+        self.assertIn("SIMULINK_ROS_DEVICE_IMAGE=casy-simulink-ros-device", text)
+        self.assertIn("SIMULINK_ROS_DEVICE_SSH_PORT=2222", text)
+        self.assertIn("SIMULINK_ROS_DEVICE_PASSWORD_FILE=/etc/casy-drone/simulink_ros_device_password", text)
+        self.assertIn("SIMULINK_CATKIN_HOST_DIR=/home/casy/simulink_catkin_ws", text)
+        self.assertNotIn("SIMULINK_ROS_DEVICE_PASSWORD=", text)
 
     def test_install_script_uses_pip_retries_for_mavproxy_downloads(self):
         text = (DEPLOY_DIR / "install.sh").read_text(encoding="utf-8")

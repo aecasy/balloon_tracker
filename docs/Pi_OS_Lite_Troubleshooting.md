@@ -408,3 +408,72 @@ Remaining blockers from this validation pass:
 - OptiTrack topics were not present on the remote ROS master during the check, even though the master was reachable.
 - `/target_bearing` sampled `z: 0.0` during the automated check because no visible target was confirmed at that moment.
 - The active Simulink-generated package is still not identified. `test_position_control4` is the newest/largest-looking candidate, but that is not proof. Do not auto-start any generated node until the intended package is confirmed.
+
+## Simulink ROS Device Container
+
+Latest planning date: 2026-06-18.
+
+Goal:
+
+```text
+Preserve the old Simulink GUI workflow where Simulink deploys a ROS package over SSH,
+starts it on the target, and monitors model outputs from the Simulink model.
+```
+
+Implementation approach:
+
+```text
+Dockerfile.simulink-ros-device builds a separate ROS Noetic SSH target.
+docker compose service simulink-ros-device uses network_mode: host.
+container sshd listens on port 2222.
+container user is ubuntu.
+ROS folder is /opt/ros/noetic.
+catkin workspace is /home/ubuntu/catkin_ws.
+default host workspace mount is /home/casy/simulink_catkin_ws.
+password source is /etc/casy-drone/simulink_ros_device_password.
+```
+
+The password file is local to the Pi and must stay out of git:
+
+```bash
+deploy/pi_os_lite/simulink_ros_device.sh init-password
+```
+
+Build/start/check commands:
+
+```bash
+deploy/pi_os_lite/simulink_ros_device.sh build
+deploy/pi_os_lite/simulink_ros_device.sh start
+deploy/pi_os_lite/simulink_ros_device.sh check
+```
+
+Windows SSH smoke test:
+
+```powershell
+ssh -p 2222 ubuntu@192.168.1.126 "source /opt/ros/noetic/setup.bash && rosversion -d"
+```
+
+Simulink GUI settings to test:
+
+```text
+Device address: 192.168.1.126:2222
+Username: ubuntu
+ROS folder: /opt/ros/noetic
+Catkin workspace: ~/catkin_ws
+```
+
+Important experiment boundary:
+
+```text
+If the Simulink GUI Test button cannot connect to 192.168.1.126:2222,
+stop and choose a new approach before adding SSH aliases, host forwarding,
+native ROS installs, or other fallback plumbing.
+```
+
+Safety boundary for guidance-node tests:
+
+```bash
+sudo systemctl stop casy-ros-bridges.service
+```
+
+Do this before deploying a generated model that can publish `quad_commands`, so ROS-only behavior can be verified before MAVLink command delivery is reconnected. Props remain removed for any MAVLink/RC override validation.

@@ -577,6 +577,66 @@ chmod +x scripts/ros_exec.sh
 ./scripts/ros_exec.sh rostopic hz /target_bearing
 ```
 
+## Simulink GUI ROS Device Container
+
+The old Ubuntu 20.04 image let Simulink deploy a generated ROS package over SSH, start it, and monitor it from the Simulink model. The Pi OS Lite setup keeps the camera and MAVLink host services native, but adds a separate optional Docker target for this Simulink GUI workflow.
+
+This container is intentionally separate from the tracker and bridge image. It exposes SSH on port `2222`, logs in as `ubuntu`, provides ROS Noetic at `/opt/ros/noetic`, and keeps Simulink-deployed packages in a persistent catkin workspace mounted at `/home/ubuntu/catkin_ws`.
+
+On the Pi, pull the latest branch first:
+
+```bash
+cd ~/balloon_tracker
+git pull
+```
+
+Create the local SSH password file. The password is stored only on the Pi and is not committed:
+
+```bash
+deploy/pi_os_lite/simulink_ros_device.sh init-password
+```
+
+Build and start the container:
+
+```bash
+deploy/pi_os_lite/simulink_ros_device.sh build
+deploy/pi_os_lite/simulink_ros_device.sh start
+deploy/pi_os_lite/simulink_ros_device.sh check
+```
+
+From Windows PowerShell, verify SSH and ROS:
+
+```powershell
+ssh -p 2222 ubuntu@192.168.1.126 "source /opt/ros/noetic/setup.bash && rosversion -d"
+```
+
+Use these Simulink hardware settings for the first GUI test:
+
+```text
+Device address: 192.168.1.126:2222
+Username: ubuntu
+ROS folder: /opt/ros/noetic
+Catkin workspace: ~/catkin_ws
+```
+
+The first experiment is specifically whether the Simulink GUI accepts `host:port` in the device address. If the GUI `Test` button rejects `192.168.1.126:2222`, stop here and decide on a new approach before adding SSH aliases, host SSH forwarding, native ROS installs, or other fallback plumbing.
+
+If the GUI test succeeds, deploy a tiny non-flight ROS model first and verify Monitor & Tune before using the real guidance model. Before testing any generated node that can publish `quad_commands`, stop MAVLink command delivery:
+
+```bash
+sudo systemctl stop casy-ros-bridges.service
+```
+
+For the real guidance model, verify ROS-only behavior before reconnecting MAVLink:
+
+```text
+subscribe /target_bearing      geometry_msgs/PointStamped
+subscribe /autonomy_enable     std_msgs/Bool
+publish   /quad_commands       std_msgs/UInt16MultiArray
+```
+
+`/quad_commands` must remain zero or no-override when autonomy is false or the target is lost. Keep propellers removed for any later test that reconnects command output to MAVLink.
+
 ## Pi OS Lite Deployment
 
 On the new Pi (`casy@192.168.1.168`), pull the branch and install the migration support files:
@@ -647,7 +707,11 @@ python3 -m unittest discover -s tests
 
 ```text
 Dockerfile.ros
+Dockerfile.simulink-ros-device
 docker-compose.yml
+docker/
+  simulink_ros_device/
+    entrypoint.sh
 deploy/
   pi_os_lite/
     pi_os_lite.env.example
@@ -655,6 +719,7 @@ deploy/
     preflight.sh
     run_mavproxy.sh
     run_tracker_pipeline.sh
+    simulink_ros_device.sh
     shutdown_on_ch8.py
     sudoers.d/
     systemd/

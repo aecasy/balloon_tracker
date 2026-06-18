@@ -5,6 +5,23 @@ x-ros-node-build: &ros_node_build
   image: ${DOCKER_IMAGE:-casy-ros-node}
 
 services:
+  simulink-ros-device:
+    build:
+      context: .
+      dockerfile: Dockerfile.simulink-ros-device
+    image: ${SIMULINK_ROS_DEVICE_IMAGE:-casy-simulink-ros-device}
+    network_mode: "host"
+    environment:
+      ROS_MASTER_URI: ${ROS_MASTER_URI:-http://192.168.1.154:11311}
+      ROS_IP: ${ROS_IP:-192.168.1.168}
+      SIMULINK_ROS_DEVICE_SSH_PORT: ${SIMULINK_ROS_DEVICE_SSH_PORT:-2222}
+      SIMULINK_ROS_DEVICE_PASSWORD_FILE: /run/secrets/simulink_ros_device_password
+      SIMULINK_CATKIN_WORKSPACE: /home/ubuntu/catkin_ws
+    volumes:
+      - ${SIMULINK_CATKIN_HOST_DIR:-/home/casy/simulink_catkin_ws}:/home/ubuntu/catkin_ws
+      - ${SIMULINK_ROS_DEVICE_PASSWORD_FILE:-/etc/casy-drone/simulink_ros_device_password}:/run/secrets/simulink_ros_device_password:ro
+    profiles: ["simulink"]
+
   target-bearing:
     <<: *ros_node_build
     network_mode: "host"

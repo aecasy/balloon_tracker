@@ -56,6 +56,7 @@ Raspberry Pi OS Lite host
     quad_commands -> MAVLink RC override bridge
     RC CH7 -> autonomy_enable publisher
     build-only Simulink-generated catkin packages
+    optional Simulink ROS-device SSH target on port 2222
 ```
 
 The Pi is a ROS node host, not the ROS master. Runtime values live in `/etc/casy-drone/pi_os_lite.env` on the Pi.
@@ -213,6 +214,7 @@ Docker ROS services:
 
 - `casy-ros-bridges.service`
 - `casy-tracker-pipeline.service`
+- optional `simulink-ros-device` compose profile for Simulink GUI deploy/monitor tests
 
 MAVProxy settings:
 
@@ -269,12 +271,27 @@ hold time: 1.0 s
 action: sudo /sbin/shutdown -h now
 ```
 
+Simulink GUI deploy/monitor compatibility:
+
+```text
+container service: simulink-ros-device
+startup profile: docker compose --profile simulink
+SSH target: ubuntu@<pi-ip> port 2222
+ROS folder: /opt/ros/noetic
+catkin workspace: /home/ubuntu/catkin_ws
+host workspace mount: /home/casy/simulink_catkin_ws by default
+password source: /etc/casy-drone/simulink_ros_device_password by default
+```
+
+This container is not auto-started on boot. It exists to test whether the Simulink GUI can connect to `Device address: <pi-ip>:2222` while preserving the old deploy, run, and Monitor & Tune workflow. If the GUI cannot connect to `host:port`, stop and choose a new integration path before adding fallback SSH plumbing.
+
 ## Safety And Validation Rules
 
 - Keep propellers removed during all MAVLink, RC override, and service validation.
 - Start services one at a time.
 - Do not enable boot services until manual checks pass.
 - Do not auto-start Simulink-generated nodes until the active generated package is chosen and validated.
+- Stop `casy-ros-bridges.service` before testing a generated guidance node that can publish `quad_commands`.
 - A USB-powered FC may report battery/pre-arm warnings; that does not by itself invalidate UART communication.
 
 Required validation path:
