@@ -477,3 +477,24 @@ sudo systemctl stop casy-ros-bridges.service
 ```
 
 Do this before deploying a generated model that can publish `quad_commands`, so ROS-only behavior can be verified before MAVLink command delivery is reconnected. Props remain removed for any MAVLink/RC override validation.
+
+Pi build/smoke verification on 2026-06-18:
+
+```text
+Pi checkout fast-forwarded cleanly to feat/ros-docker commit 0a34fb4.
+deploy/pi_os_lite/simulink_ros_device.sh build completed successfully.
+Built image: casy-simulink-ros-device:latest.
+Temporary password-file smoke test started the container with a temporary workspace.
+Inside the container, rosversion -d returned noetic.
+Inside the container, catkin_make completed successfully in /home/ubuntu/catkin_ws.
+The temporary container and temporary password/workspace files were removed afterward.
+Port 2222 was closed after cleanup.
+```
+
+Pending manual test:
+
+```text
+Create the real local password file with deploy/pi_os_lite/simulink_ros_device.sh init-password.
+Start the container with deploy/pi_os_lite/simulink_ros_device.sh start.
+Use the Simulink GUI Test button with Device address 192.168.1.126:2222.
+```
