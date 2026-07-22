@@ -622,7 +622,18 @@ camera capture -> tracker result -> Docker stdin receive -> ROS publish -> Simul
 
 The old Ubuntu 20.04 image let Simulink deploy a generated ROS package over SSH, start it, and monitor it from the Simulink model. The Pi OS Lite setup keeps the camera and MAVLink host services native, but adds a separate optional Docker target for this Simulink GUI workflow.
 
-This container is intentionally separate from the tracker and bridge image. It exposes SSH on port `2222`, logs in as `ubuntu`, provides ROS Noetic at `/opt/ros/noetic`, and keeps Simulink-deployed packages in a persistent catkin workspace mounted at `/home/ubuntu/catkin_ws`.
+This container is intentionally separate from the tracker and bridge image. It exposes SSH on port `22`, logs in as `ubuntu`, provides ROS Noetic at `/opt/ros/noetic`, and keeps Simulink-deployed packages in a persistent catkin workspace mounted at `/home/ubuntu/catkin_ws`.
+
+The container must own port `22` because Simulink's external-mode (Monitor & Tune)
+connection cannot use a non-default SSH port: with `Device address:
+<pi-ip>:2222` the build and SSH deploy succeed, but external mode passes the
+whole `host:port` string to `gethostbyname()` and fails. The Pi host sshd is
+therefore moved to port `2222` via
+`/etc/ssh/sshd_config.d/99-simulink-port-swap.conf`, so host access is:
+
+```bash
+ssh -p 2222 casy@192.168.1.126
+```
 
 On the Pi, pull the latest branch first:
 
@@ -648,19 +659,23 @@ deploy/pi_os_lite/simulink_ros_device.sh check
 From Windows PowerShell, verify SSH and ROS:
 
 ```powershell
-ssh -p 2222 ubuntu@192.168.1.126 "source /opt/ros/noetic/setup.bash && rosversion -d"
+ssh ubuntu@192.168.1.126 "source /opt/ros/noetic/setup.bash && rosversion -d"
 ```
 
 Use these Simulink hardware settings:
 
 ```text
-Device address: 192.168.1.126:2222
+Device address: 192.168.1.126
 Username: ubuntu
 ROS folder: /opt/ros/noetic
 Catkin workspace: /home/ubuntu/catkin_ws
 ```
 
-The Simulink GUI has been verified to accept `host:port` in the device address and connect over SSH port `2222`. If Simulink probes `/home/user/catkin_ws` anyway, that path is supported as a compatibility alias to `/home/ubuntu/catkin_ws`.
+The Simulink GUI accepts `host:port` in the device address and can build and
+deploy over a custom SSH port, but Monitor & Tune (external mode) cannot, so the
+device address must stay a bare IP with the container on port `22`. If Simulink
+probes `/home/user/catkin_ws`, that path is supported as a compatibility alias
+to `/home/ubuntu/catkin_ws`.
 
 If the GUI test succeeds, deploy a tiny non-flight ROS model first and verify Monitor & Tune before using the real guidance model. Before testing any generated node that can publish `quad_commands`, stop MAVLink command delivery:
 

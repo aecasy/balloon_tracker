@@ -6,7 +6,7 @@ PROJECT_DIR="${PROJECT_DIR:-/home/casy/balloon_tracker}"
 ENV_FILE="${ENV_FILE:-/etc/casy-drone/pi_os_lite.env}"
 PASSWORD_FILE="${SIMULINK_ROS_DEVICE_PASSWORD_FILE:-/etc/casy-drone/simulink_ros_device_password}"
 HOST_WORKSPACE="${SIMULINK_CATKIN_HOST_DIR:-/home/casy/simulink_catkin_ws}"
-SSH_PORT="${SIMULINK_ROS_DEVICE_SSH_PORT:-2222}"
+SSH_PORT="${SIMULINK_ROS_DEVICE_SSH_PORT:-22}"
 SERVICE="simulink-ros-device"
 
 usage() {

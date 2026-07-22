@@ -626,3 +626,74 @@ green_tracker.py command line no longer contains --method
 rostopic info /target_bearing shows one publisher
 rostopic echo -n 1 /target_bearing returns a geometry_msgs/PointStamped sample
 ```
+
+
+## Simulink External Mode Port Failure (2026-07-22)
+
+Symptom while running Monitor & Tune from MATLAB R2025b for
+`matlab/Position_Control_Sim_01.slx`:
+
+```text
+Build process completed successfully
+Connecting to ROS target '192.168.1.126:2222' with external mode at port 17725.
+Expected external mode address, 192.168.1.126:2222, to be the same as the ROS
+device address, 192.168.1.126. Use 192.168.1.126 as external mode address.
+gethostbyname() call failed.
+Error occurred while executing External Mode MEX-file 'ext_comm':
+Failed to connect to the target.
+```
+
+Diagnosis on the Pi:
+
+```text
+docker exec balloon_tracker-simulink-ros-device-1 ps aux
+  -> /home/ubuntu/catkin_ws/devel/lib/position_control_sim_01/Position_Control_Sim_01
+     was deployed and running (SSH deploy over port 2222 worked)
+rostopic hz /quad_commands
+  -> no messages (the node blocks waiting for the external-mode connection)
+```
+
+Root cause:
+
+```text
+Simulink can build and deploy over Device address <pi-ip>:2222, but the
+external-mode (Monitor & Tune) TCP connection on port 17725 passes the whole
+"192.168.1.126:2222" string to gethostbyname(), which fails. There is no
+separate working external-mode address setting; the device address must be a
+bare IP, which forces the SSH deploy port to the default 22.
+```
+
+This matches the earlier finding in the `Pi-5-Image-20260627-test-flight`
+project, where the same limitation forced the host sshd to port 2222 so the
+Simulink container could own port 22.
+
+Fix (mirrors the prior project):
+
+```text
+1. Stop the simulink-ros-device container (frees its old port 2222).
+2. Move the Pi host sshd to port 2222:
+   /etc/ssh/sshd_config.d/99-simulink-port-swap.conf containing: Port 2222
+   sudo sshd -t && sudo systemctl restart ssh
+3. Add SIMULINK_ROS_DEVICE_SSH_PORT=22 to /etc/casy-drone/pi_os_lite.env.
+4. Repo defaults changed from 2222 to 22 in Dockerfile.simulink-ros-device,
+   docker-compose.yml, docker/simulink_ros_device/entrypoint.sh,
+   deploy/pi_os_lite/simulink_ros_device.sh, and pi_os_lite.env.example.
+5. Restart the container; it now binds host port 22 (host networking).
+6. MATLAB device address becomes bare 192.168.1.126, SSH port 22.
+```
+
+Notes:
+
+```text
+- Host access afterwards: ssh -p 2222 casy@192.168.1.126
+- Windows known_hosts needs cleanup after the swap because the container and
+  host keys move ports: ssh-keygen -R 192.168.1.126 and
+  ssh-keygen -R "[192.168.1.126]:2222"
+- The orphaned Position_Control_Sim_01 process from the failed session was
+  killed manually; a fresh deploy starts a new one.
+- The helper script exports SIMULINK_ROS_DEVICE_SSH_PORT before docker compose,
+  and OS environment beats --env-file in compose interpolation, so the script
+  default (not only the env file) had to change.
+- OptiTrack header stamps on /vrpn_client_node/Quad1/pose show a 2023 date;
+  the master PC clock is wrong. Irrelevant to the fixed-step model, but worth
+  fixing before any header-time-based logic.

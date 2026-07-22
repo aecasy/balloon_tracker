@@ -80,7 +80,7 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("dockerfile: Dockerfile.simulink-ros-device", text)
         self.assertIn("image: ${SIMULINK_ROS_DEVICE_IMAGE:-casy-simulink-ros-device}", text)
         self.assertIn('network_mode: "host"', text)
-        self.assertIn("SIMULINK_ROS_DEVICE_SSH_PORT: ${SIMULINK_ROS_DEVICE_SSH_PORT:-2222}", text)
+        self.assertIn("SIMULINK_ROS_DEVICE_SSH_PORT: ${SIMULINK_ROS_DEVICE_SSH_PORT:-22}", text)
         self.assertIn("SIMULINK_ROS_DEVICE_PASSWORD_FILE: /run/secrets/simulink_ros_device_password", text)
         self.assertIn("${SIMULINK_CATKIN_HOST_DIR:-/home/casy/simulink_catkin_ws}:/home/ubuntu/catkin_ws", text)
         self.assertIn("${SIMULINK_ROS_DEVICE_PASSWORD_FILE:-/etc/casy-drone/simulink_ros_device_password}:/run/secrets/simulink_ros_device_password:ro", text)
@@ -98,7 +98,7 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         text = (PROJECT_ROOT / "Dockerfile.simulink-ros-device").read_text(encoding="utf-8")
 
         self.assertIn("FROM ros:noetic-ros-base-focal", text)
-        self.assertIn("ENV SIMULINK_ROS_DEVICE_SSH_PORT=2222", text)
+        self.assertIn("ENV SIMULINK_ROS_DEVICE_SSH_PORT=22", text)
         self.assertIn("ENV SIMULINK_CATKIN_WORKSPACE=/home/ubuntu/catkin_ws", text)
         self.assertIn("openssh-server", text)
         self.assertIn("python3-catkin-tools", text)
@@ -108,12 +108,12 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         self.assertIn("mkdir -p /home/ubuntu/catkin_ws/src /home/user /run/sshd", text)
         self.assertIn("ln -s /home/ubuntu/catkin_ws /home/user/catkin_ws", text)
         self.assertIn("COPY docker/simulink_ros_device/entrypoint.sh", text)
-        self.assertIn("EXPOSE 2222", text)
+        self.assertIn("EXPOSE 22", text)
 
     def test_simulink_ros_device_entrypoint_requires_runtime_password(self):
         text = (PROJECT_ROOT / "docker" / "simulink_ros_device" / "entrypoint.sh").read_text(encoding="utf-8")
 
-        self.assertIn('SSH_PORT="${SIMULINK_ROS_DEVICE_SSH_PORT:-2222}"', text)
+        self.assertIn('SSH_PORT="${SIMULINK_ROS_DEVICE_SSH_PORT:-22}"', text)
         self.assertIn('PASSWORD_FILE="${SIMULINK_ROS_DEVICE_PASSWORD_FILE:-}"', text)
         self.assertIn("SIMULINK_ROS_DEVICE_PASSWORD or SIMULINK_ROS_DEVICE_PASSWORD_FILE is required", text)
         self.assertIn("printf 'ubuntu:%s\\n' \"$PASSWORD\" | chpasswd", text)
@@ -139,7 +139,7 @@ class PiOsLiteMigrationTests(unittest.TestCase):
         text = (DEPLOY_DIR / "pi_os_lite.env.example").read_text(encoding="utf-8")
 
         self.assertIn("SIMULINK_ROS_DEVICE_IMAGE=casy-simulink-ros-device", text)
-        self.assertIn("SIMULINK_ROS_DEVICE_SSH_PORT=2222", text)
+        self.assertIn("SIMULINK_ROS_DEVICE_SSH_PORT=22", text)
         self.assertIn("SIMULINK_ROS_DEVICE_PASSWORD_FILE=/etc/casy-drone/simulink_ros_device_password", text)
         self.assertIn("SIMULINK_CATKIN_HOST_DIR=/home/casy/simulink_catkin_ws", text)
         self.assertNotIn("SIMULINK_ROS_DEVICE_PASSWORD=", text)

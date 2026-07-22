@@ -1,7 +1,7 @@
 FROM ros:noetic-ros-base-focal
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV SIMULINK_ROS_DEVICE_SSH_PORT=2222
+ENV SIMULINK_ROS_DEVICE_SSH_PORT=22
 ENV SIMULINK_CATKIN_WORKSPACE=/home/ubuntu/catkin_ws
 
 RUN apt-get update && apt-get install -y \
@@ -36,6 +36,6 @@ RUN useradd -m -s /bin/bash ubuntu \
 COPY docker/simulink_ros_device/entrypoint.sh /usr/local/bin/simulink-ros-device-entrypoint
 RUN chmod +x /usr/local/bin/simulink-ros-device-entrypoint
 
-EXPOSE 2222
+EXPOSE 22
 
 ENTRYPOINT ["/usr/local/bin/simulink-ros-device-entrypoint"]

@@ -56,7 +56,7 @@ Raspberry Pi OS Lite host
     quad_commands -> MAVLink RC override bridge
     RC CH7 -> autonomy_enable publisher
     build-only Simulink-generated catkin packages
-    optional Simulink ROS-device SSH target on port 2222
+    optional Simulink ROS-device SSH target on port 22 (host sshd moved to 2222)
 ```
 
 The Pi is a ROS node host, not the ROS master. Runtime values live in `/etc/casy-drone/pi_os_lite.env` on the Pi.
@@ -296,7 +296,8 @@ Simulink GUI deploy/monitor compatibility:
 ```text
 container service: simulink-ros-device
 startup profile: docker compose --profile simulink
-SSH target: ubuntu@<pi-ip> port 2222
+SSH target: ubuntu@<pi-ip> port 22
+host sshd access: casy@<pi-ip> port 2222
 ROS folder: /opt/ros/noetic
 catkin workspace: /home/ubuntu/catkin_ws
 Simulink compatibility workspace alias: /home/user/catkin_ws
@@ -304,7 +305,7 @@ host workspace mount: /home/casy/simulink_catkin_ws by default
 password source: /etc/casy-drone/simulink_ros_device_password by default
 ```
 
-This container is not auto-started on boot. It preserves the old Simulink deploy, run, and Monitor & Tune workflow over `Device address: <pi-ip>:2222`. The Simulink GUI has connected successfully to `192.168.1.126:2222`; deployment validation is now focused on workspace initialization and generated model behavior.
+This container is not auto-started on boot. It preserves the old Simulink deploy, run, and Monitor & Tune workflow over `Device address: <pi-ip>` (bare IP, container on SSH port 22). A non-default SSH port is not usable end to end: Simulink can build and deploy over `<pi-ip>:2222`, but the external-mode (Monitor & Tune) connection passes the whole `host:port` string to `gethostbyname()` and fails. The Pi host sshd is therefore moved to port 2222 and the container owns port 22.
 
 ## Safety And Validation Rules
 
