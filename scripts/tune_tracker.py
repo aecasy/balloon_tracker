@@ -35,8 +35,12 @@ CAMERA_WINDOW = "camera"
 MASK_WINDOW = "mask"
 FOCUS_MODES = ("none", "continuous", "manual")
 AWB_MODES = ("auto", "incandescent", "tungsten", "fluorescent", "indoor", "daylight", "cloudy", "custom")
-PANEL_WIDTH = 760
-PANEL_HEIGHT = 1420
+COL_WIDTH = 476
+ROW_H = 30
+HEADER_H = 26
+PANEL_WIDTH = 24 + (COL_WIDTH * 2) + 24
+PANEL_HEIGHT = 900
+HELP_Y = 780
 
 
 @dataclass(frozen=True)
@@ -59,18 +63,20 @@ class ControlRow:
 
 
 class ControlPanel:
-    def __init__(self, config: AppConfig, max_area: int, show_hitboxes: bool = False) -> None:
+    def __init__(self, config: AppConfig, max_area: int, show_hitboxes: bool = False, headless: bool = False) -> None:
         self.max_area = max_area
         self.show_hitboxes = show_hitboxes
+        self.headless = headless
         self.specs = build_control_specs(max_area)
         self.values = initial_control_values(config)
         self.rows: List[ControlRow] = []
         self.hover_key: Optional[str] = None
         self.drag_key: Optional[str] = None
 
-        cv2.namedWindow(CONTROLS_WINDOW, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(CONTROLS_WINDOW, PANEL_WIDTH, PANEL_HEIGHT)
-        cv2.setMouseCallback(CONTROLS_WINDOW, self.handle_mouse)
+        if not headless:
+            # WINDOW_AUTOSIZE keeps the panel at 1:1 so text stays crisp
+            cv2.namedWindow(CONTROLS_WINDOW, cv2.WINDOW_AUTOSIZE)
+            cv2.setMouseCallback(CONTROLS_WINDOW, self.handle_mouse)
 
     def read_config(self, base_config: AppConfig) -> AppConfig:
         lower = (
@@ -137,48 +143,84 @@ class ControlPanel:
             ),
         )
 
-    def draw(self, config: AppConfig) -> None:
+    def draw(self, config: AppConfig) -> np.ndarray:
         canvas = np.full((PANEL_HEIGHT, PANEL_WIDTH, 3), (34, 38, 42), dtype=np.uint8)
         self.rows = []
 
-        cv2.putText(canvas, "Tracker tuning", (24, 34), cv2.FONT_HERSHEY_SIMPLEX, 0.78, (240, 240, 240), 2)
-        cv2.putText(canvas, "Press s to save, q to quit", (24, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (190, 195, 200), 1)
+        cv2.putText(canvas, "Tracker tuning", (24, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.82, (240, 240, 240), 2)
+        cv2.putText(
+            canvas,
+            "Press s to save, q to quit   |   click or drag a slider track to set a value",
+            (24, 64),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.52,
+            (190, 195, 200),
+            1,
+        )
 
-        y = 98
-        current_group = ""
-        for spec in self.specs:
-            if spec.group != current_group:
-                current_group = spec.group
-                y += 6
-                draw_group_header(canvas, current_group, y)
-                y += 22
-
-            row = self.draw_slider(canvas, spec, y)
-            self.rows.append(row)
-            y += 28
+        columns = self._split_columns()
+        col_x = [24, 24 + COL_WIDTH]
+        for index, column in enumerate(columns):
+            x0 = col_x[index]
+            y = 92
+            for kind, payload in column:
+                if kind == "header":
+                    y += 8
+                    draw_group_header(canvas, payload, y, x0)
+                    y += HEADER_H
+                else:
+                    row = self.draw_slider(canvas, payload, x0, y)
+                    self.rows.append(row)
+                    y += ROW_H
 
         if self.show_hitboxes:
             self.draw_hitboxes(canvas)
 
         self.draw_help(canvas, config)
-        cv2.imshow(CONTROLS_WINDOW, canvas)
+        if not self.headless:
+            cv2.imshow(CONTROLS_WINDOW, canvas)
+        return canvas
 
-    def draw_slider(self, canvas: np.ndarray, spec: ControlSpec, y: int) -> ControlRow:
-        label_x = 28
-        value_x = 196
-        track_x = 280
-        track_y = y - 6
-        track_w = 380
-        track_h = 12
-        knob_radius = 8
+    def _split_columns(self) -> List[List[Tuple[str, object]]]:
+        items: List[Tuple[str, object]] = []
+        current_group = ""
+        for spec in self.specs:
+            if spec.group != current_group:
+                current_group = spec.group
+                items.append(("header", spec.group))
+            items.append(("slider", spec))
+
+        target = (len(items) + 1) // 2
+        if items[target - 1][0] == "header":  # don't leave a header stranded at a column bottom
+            target += 1
+        col1 = items[:target]
+        col2 = items[target:]
+
+        # if column 2 starts mid-group, reprint that group's header for context
+        if col2 and col2[0][0] == "slider":
+            spec = col2[0][1]
+            col2.insert(0, ("header", spec.group))
+
+        return [col1, col2]
+
+    def draw_slider(self, canvas: np.ndarray, spec: ControlSpec, x0: int, y: int) -> ControlRow:
+        label_x = x0 + 4
+        track_x = x0 + 200
+        track_y = y - 7
+        track_w = 248
+        track_h = 14
+        knob_radius = 9
 
         hovered = self.hover_key == spec.key
-        text_color = (255, 255, 255) if hovered else (210, 215, 220)
+        text_color = (255, 255, 255) if hovered else (214, 219, 224)
         track_color = (90, 100, 108)
         fill_color = (69, 190, 120) if hovered else (60, 155, 105)
 
-        cv2.putText(canvas, spec.label, (label_x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.48, text_color, 1)
-        cv2.putText(canvas, self.format_value(spec), (value_x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.48, text_color, 1)
+        cv2.putText(canvas, spec.label, (label_x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.52, text_color, 1, cv2.LINE_AA)
+        value_text = self.format_value(spec)
+        (value_w, _), _ = cv2.getTextSize(value_text, cv2.FONT_HERSHEY_SIMPLEX, 0.52, 1)
+        value_x = max(label_x + 78, track_x - 10 - value_w)  # right-align value just left of the track
+        cv2.putText(canvas, value_text, (value_x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.52, text_color, 1, cv2.LINE_AA)
 
         cv2.rectangle(canvas, (track_x, track_y), (track_x + track_w, track_y + track_h), track_color, -1)
 
@@ -189,19 +231,19 @@ class ControlPanel:
         cv2.rectangle(canvas, (track_x, track_y), (knob_x, track_y + track_h), fill_color, -1)
         cv2.circle(canvas, (knob_x, track_y + track_h // 2), knob_radius, (235, 245, 238), -1)
 
-        label_rect_x = label_x - 4
+        label_rect_x = x0
         label_rect_y = y - 22
-        label_rect_w = (track_x + track_w + 24) - label_rect_x
-        label_rect_h = 34
+        label_rect_w = (track_x + track_w + 20) - label_rect_x
+        label_rect_h = ROW_H
         label_rect = (label_rect_x, label_rect_y, label_rect_w, label_rect_h)
         track_rect = (track_x, track_y - 8, track_w, track_h + 16)
         return ControlRow(spec=spec, label_rect=label_rect, track_rect=track_rect)
 
     def draw_help(self, canvas: np.ndarray, config: AppConfig) -> None:
         x = 24
-        y = 1280
-        w = 712
-        h = 116
+        y = HELP_Y
+        w = PANEL_WIDTH - 48
+        h = 100
         cv2.rectangle(canvas, (x, y), (x + w, y + h), (48, 54, 60), -1)
         cv2.rectangle(canvas, (x, y), (x + w, y + h), (82, 92, 100), 1)
 
@@ -213,14 +255,15 @@ class ControlPanel:
             title = spec.label
             body = spec.tooltip
 
-        cv2.putText(canvas, title, (x + 14, y + 28), cv2.FONT_HERSHEY_SIMPLEX, 0.58, (245, 245, 245), 1)
-        draw_wrapped_text(canvas, body, x + 14, y + 56, 96, (205, 212, 218))
+        cv2.putText(canvas, title, (x + 14, y + 26), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (245, 245, 245), 1, cv2.LINE_AA)
+        draw_wrapped_text(canvas, body, x + 14, y + 52, 150, (205, 212, 218))
 
         summary = (
-            f"Saved shape: HSV {config.hsv.lower}-{config.hsv.upper}, "
-            f"score {config.scoring.min_score:.2f}, area {config.tracker.min_area:.0f}"
+            f"Live: HSV {config.hsv.lower}-{config.hsv.upper}, "
+            f"min score {config.scoring.min_score:.2f}, min area {config.tracker.min_area:.0f}, "
+            f"exposure {config.camera.exposure_time} gain {config.camera.analogue_gain:.1f}"
         )
-        cv2.putText(canvas, summary, (x + 14, y + 102), cv2.FONT_HERSHEY_SIMPLEX, 0.44, (150, 210, 170), 1)
+        cv2.putText(canvas, summary, (x + 14, y + 88), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (150, 210, 170), 1, cv2.LINE_AA)
 
     def handle_mouse(self, event: int, x: int, y: int, flags: int, param) -> None:
         x, y = self.map_mouse_point(x, y)
@@ -331,8 +374,21 @@ def main() -> int:
     tracker = TargetTracker(config.tracker, config.scoring)
     image_size = ImageSize(config.camera.width, config.camera.height)
 
+    if args.remote:
+        from vision_tracker.camera_client import NetworkCamera
+
+        host, _, port = args.remote.rpartition(":")
+        if not host or not port:
+            raise SystemExit("--remote must be HOST:PORT, e.g. 192.168.1.126:5001")
+        camera_source = NetworkCamera(host, int(port))
+        print(f"remote_camera={host}:{port}", flush=True)
+    else:
+        camera_source = PiCamera(config.camera)
+
     print(f"loaded_config={config_path}", flush=True)
     print("press s to save, q to quit", flush=True)
+
+    arrange_windows(args.screen, config.camera.width, config.camera.height)
 
     last_focus = None
     last_lens_position = None
@@ -343,7 +399,7 @@ def main() -> int:
     last_framerate = None
 
     try:
-        with PiCamera(config.camera) as camera:
+        with camera_source as camera:
             while True:
                 live_config = panel.read_config(config)
                 tracker.config = live_config.tracker
@@ -424,9 +480,83 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--framerate", type=float, default=None, help="temporary camera framerate override")
     parser.add_argument("--focus", choices=FOCUS_MODES, default=None, help="temporary focus mode override")
     parser.add_argument("--lens-position", type=float, default=None, help="temporary manual lens position override")
+    parser.add_argument(
+        "--remote",
+        type=str,
+        default=None,
+        help="stream frames from a remote camera_stream_server as HOST:PORT (e.g. 192.168.1.126:5001)",
+    )
     parser.add_argument("--max-area", type=int, default=50000, help="maximum value for the min-area slider")
+    parser.add_argument(
+        "--screen",
+        type=str,
+        default="auto",
+        help="display size WxH used to arrange the windows, or 'auto' to detect (default)",
+    )
     parser.add_argument("--show-control-hitboxes", action="store_true", help="draw control hitboxes for GUI debugging")
     return parser.parse_args()
+
+
+def detect_screen_size() -> Tuple[int, int]:
+    """Return the logical screen size that OpenCV windows are positioned within.
+
+    Uses the same DPI context as the process, so it matches how cv2 windows are
+    laid out (e.g. 2048x1152 on a 2560x1440 panel at 125% scaling).
+    """
+    try:
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        width = int(user32.GetSystemMetrics(0))
+        height = int(user32.GetSystemMetrics(1))
+        if width > 0 and height > 0:
+            return width, height
+    except Exception:
+        pass
+    return 1920, 1080
+
+
+def arrange_windows(screen: str, camera_width: int, camera_height: int) -> None:
+    """Position the control, camera, and mask windows so all fit on one screen."""
+    if screen == "auto":
+        screen_w, screen_h = detect_screen_size()
+        print(f"screen_detected={screen_w}x{screen_h}", flush=True)
+    else:
+        try:
+            screen_w, screen_h = (int(v) for v in screen.lower().split("x", 1))
+        except (ValueError, AttributeError):
+            screen_w, screen_h = detect_screen_size()
+
+    gap = 12
+    aspect = camera_height / camera_width
+
+    # Controls occupy the left column at native 1:1 size (kept under half the screen).
+    cv2.moveWindow(CONTROLS_WINDOW, 0, 0)
+
+    # Right column: camera is the largest window, mask a smaller one beneath it.
+    right_x = PANEL_WIDTH + gap
+    avail_w = max(320, screen_w - right_x - gap)
+
+    camera_w = avail_w
+    camera_h = int(round(camera_w * aspect))
+    mask_w = int(round(avail_w * 0.7))
+    mask_h = int(round(mask_w * aspect))
+
+    total_h = camera_h + gap + mask_h + gap
+    if total_h > screen_h:  # scale both down together so they fit vertically
+        scale = (screen_h - (3 * gap)) / float(camera_h + mask_h)
+        camera_w = int(round(camera_w * scale))
+        camera_h = int(round(camera_h * scale))
+        mask_w = int(round(mask_w * scale))
+        mask_h = int(round(mask_h * scale))
+
+    for name, size, top in (
+        (CAMERA_WINDOW, (camera_w, camera_h), 0),
+        (MASK_WINDOW, (mask_w, mask_h), camera_h + (2 * gap)),
+    ):
+        cv2.namedWindow(name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(name, size[0], size[1])
+        cv2.moveWindow(name, right_x, top)
 
 
 def build_control_specs(max_area: int) -> List[ControlSpec]:
@@ -832,9 +962,9 @@ def format_metric(value) -> str:
     return f"{value:.2f}"
 
 
-def draw_group_header(canvas: np.ndarray, text: str, y: int) -> None:
-    cv2.putText(canvas, text, (24, y), cv2.FONT_HERSHEY_SIMPLEX, 0.56, (120, 230, 165), 1)
-    cv2.line(canvas, (24, y + 8), (728, y + 8), (68, 76, 82), 1)
+def draw_group_header(canvas: np.ndarray, text: str, y: int, x0: int) -> None:
+    cv2.putText(canvas, text, (x0, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (120, 230, 165), 1, cv2.LINE_AA)
+    cv2.line(canvas, (x0, y + 8), (x0 + COL_WIDTH - 40, y + 8), (68, 76, 82), 1)
 
 
 def draw_wrapped_text(canvas: np.ndarray, text: str, x: int, y: int, max_chars: int, color: Tuple[int, int, int]) -> None:
