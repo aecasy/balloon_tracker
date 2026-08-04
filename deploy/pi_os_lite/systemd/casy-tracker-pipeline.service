@@ -1,0 +1,16 @@
+[Unit]
+Description=CASY Camera Tracker to ROS Target Bearing Pipeline
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=simple
+User=casy
+Environment=ENV_FILE=/etc/casy-drone/pi_os_lite.env
+EnvironmentFile=/etc/casy-drone/pi_os_lite.env
+ExecStart=/bin/bash -lc 'cd "$PROJECT_DIR" && exec deploy/pi_os_lite/run_tracker_pipeline.sh'
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

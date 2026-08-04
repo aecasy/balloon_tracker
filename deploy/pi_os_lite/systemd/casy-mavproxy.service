@@ -1,0 +1,21 @@
+[Unit]
+Description=CASY MAVProxy Companion Link
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=casy
+Environment=ENV_FILE=/etc/casy-drone/pi_os_lite.env
+EnvironmentFile=/etc/casy-drone/pi_os_lite.env
+LogsDirectory=mavproxy
+LogsDirectoryMode=0755
+ExecStart=/bin/bash -lc 'cd "$PROJECT_DIR" && exec deploy/pi_os_lite/run_mavproxy.sh'
+Restart=always
+RestartSec=2
+TimeoutStopSec=5
+KillSignal=SIGINT
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=Shutdown Pi on RC CH8 high
+After=mavproxy.service
+Wants=mavproxy.service
+
+[Service]
+Type=simple
+User=ubuntu
+ExecStart=/usr/bin/python3 /home/ubuntu/shutdown_on_ch8.py
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

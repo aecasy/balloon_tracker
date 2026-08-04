@@ -1,0 +1,15 @@
+[Unit]
+Description=MAVProxy Companion Link (UART)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+ExecStart=/home/ubuntu/run_mavproxy.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

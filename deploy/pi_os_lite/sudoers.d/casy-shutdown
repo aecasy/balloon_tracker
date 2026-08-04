@@ -1,0 +1,1 @@
+casy ALL=NOPASSWD: /sbin/shutdown, /usr/sbin/shutdown

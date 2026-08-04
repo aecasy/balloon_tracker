@@ -83,6 +83,15 @@ class ScoringTests(unittest.TestCase):
         self.assertGreater(circle.circle_fit, elongated.circle_fit)
         self.assertGreater(circle.score, elongated.score)
 
+    def test_min_circularity_filters_scored_candidates(self):
+        mask = np.zeros((180, 180), dtype=np.uint8)
+        cv2.ellipse(mask, (90, 90), (55, 10), 0, 0, 360, 255, thickness=-1)
+
+        config = TrackerConfig(min_area=20, min_circularity=0.75, smoothing_alpha=1.0)
+        scoring = ScoringConfig(min_score=0.0)
+
+        self.assertEqual(score_candidates(mask, config, scoring), [])
+
     def test_disabled_component_does_not_affect_weighted_score(self):
         mask = np.zeros((160, 160), dtype=np.uint8)
         cv2.circle(mask, (80, 80), 28, 255, thickness=-1)
@@ -104,7 +113,8 @@ class ScoringTests(unittest.TestCase):
         )
         candidates = score_candidates(mask, config, scoring)
 
-        self.assertIsNone(candidates[0].circularity)
+        self.assertGreater(candidates[0].circularity, 0.0)
+        self.assertIsNone(candidates[0].circularity_score)
         self.assertIsNone(candidates[0].circle_fit)
         self.assertEqual(candidates[0].score, candidates[0].color_fill)
 
@@ -157,6 +167,21 @@ class ScoringTests(unittest.TestCase):
 
         self.assertFalse(result.detected)
         self.assertEqual(result.candidates, ())
+
+    def test_update_uses_scored_tracking(self):
+        mask = np.zeros((120, 120), dtype=np.uint8)
+        cv2.circle(mask, (60, 60), 20, 255, thickness=-1)
+
+        tracker = TargetTracker(
+            TrackerConfig(min_area=20, min_circularity=0.0, smoothing_alpha=1.0),
+            ScoringConfig(min_score=0.0),
+        )
+
+        result = tracker.update(mask, image_size=type("ImageSize", (), {"width": 120, "height": 120})())
+
+        self.assertTrue(result.detected)
+        self.assertEqual(result.method, "scored")
+        self.assertGreater(result.score, 0.0)
 
 
 if __name__ == "__main__":
